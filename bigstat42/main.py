@@ -43,7 +43,7 @@ Examples:
         '--days',
         type=int,
         default=7,
-        help='Number of days to analyze (default: 7)'
+        help='Number of days to analyze (default: 7, max: 365)'
     )
     
     parser.add_argument(
@@ -66,6 +66,15 @@ Examples:
     )
     
     args = parser.parse_args()
+    
+    # Validate arguments
+    if args.campus <= 0:
+        print("✗ Error: Campus ID must be a positive integer")
+        return 1
+    
+    if args.days < 1 or args.days > 365:
+        print("✗ Error: Number of days must be between 1 and 365")
+        return 1
     
     print("=" * 70)
     print("BIGSTAT42 - 42 Cluster Usage Statistics")
@@ -92,7 +101,8 @@ Examples:
             print("\n⚠ No location data found for the specified period.")
             print("Please check:")
             print("  - Your API credentials have the correct permissions")
-            print("  - The campus ID is correct")
+            print("  - The campus ID is correct (common IDs: 1=Paris, 9=Fremont, etc.)")
+            print("  - Visit https://api.intra.42.fr/apidoc/guides/web_application_flow for API docs")
             print("  - There is activity data for the specified time period")
             return 1
         

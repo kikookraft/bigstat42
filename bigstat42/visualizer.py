@@ -40,24 +40,29 @@ class Visualizer:
             filename: Filename to save the plot
             cmap: Color map to use
         """
-        plt.figure(figsize=(16, 8))
-        
-        # Create heatmap
-        sns.heatmap(data, annot=True, fmt='.0f', cmap=cmap, 
-                   xticklabels=col_labels, yticklabels=row_labels,
-                   cbar_kws={'label': 'Number of Sessions'})
-        
-        plt.title(title, fontsize=16, fontweight='bold')
-        plt.xlabel('Hour of Day', fontsize=12)
-        plt.ylabel('', fontsize=12)
-        plt.tight_layout()
-        
-        filepath = os.path.join(self.output_dir, filename)
-        plt.savefig(filepath, dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print(f"Heatmap saved to: {filepath}")
-        return filepath
+        try:
+            plt.figure(figsize=(16, 8))
+            
+            # Create heatmap
+            sns.heatmap(data, annot=True, fmt='.0f', cmap=cmap, 
+                       xticklabels=col_labels, yticklabels=row_labels,
+                       cbar_kws={'label': 'Number of Sessions'})
+            
+            plt.title(title, fontsize=16, fontweight='bold')
+            plt.xlabel('Hour of Day', fontsize=12)
+            plt.ylabel('', fontsize=12)
+            plt.tight_layout()
+            
+            filepath = os.path.join(self.output_dir, filename)
+            plt.savefig(filepath, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"Heatmap saved to: {filepath}")
+            return filepath
+        except Exception as e:
+            plt.close()  # Ensure figure is closed even on error
+            print(f"Error creating heatmap: {e}")
+            raise
     
     def create_hourly_usage_chart(self, hourly_data: Dict[int, int], filename: str = "hourly_usage.png"):
         """
@@ -159,27 +164,31 @@ class Visualizer:
         """
         filepath = os.path.join(self.output_dir, filename)
         
-        with open(filepath, 'w') as f:
-            f.write("=" * 60 + "\n")
-            f.write("CLUSTER USAGE STATISTICS SUMMARY\n")
-            f.write("=" * 60 + "\n\n")
+        try:
+            with open(filepath, 'w') as f:
+                f.write("=" * 60 + "\n")
+                f.write("CLUSTER USAGE STATISTICS SUMMARY\n")
+                f.write("=" * 60 + "\n\n")
+                
+                f.write(f"Date Range: {stats.get('date_range', 'N/A')}\n\n")
+                
+                f.write(f"Total Sessions: {stats.get('total_sessions', 0):,}\n")
+                f.write(f"Unique Users: {stats.get('unique_users', 0):,}\n")
+                f.write(f"Unique Hosts: {stats.get('unique_hosts', 0):,}\n\n")
+                
+                avg_duration = stats.get('average_session_duration_minutes', 0)
+                f.write(f"Average Session Duration: {avg_duration:.2f} minutes ({avg_duration/60:.2f} hours)\n")
+                
+                total_hours = stats.get('total_usage_hours', 0)
+                f.write(f"Total Usage Time: {total_hours:.2f} hours ({total_hours/24:.2f} days)\n\n")
+                
+                f.write("=" * 60 + "\n")
             
-            f.write(f"Date Range: {stats.get('date_range', 'N/A')}\n\n")
-            
-            f.write(f"Total Sessions: {stats.get('total_sessions', 0):,}\n")
-            f.write(f"Unique Users: {stats.get('unique_users', 0):,}\n")
-            f.write(f"Unique Hosts: {stats.get('unique_hosts', 0):,}\n\n")
-            
-            avg_duration = stats.get('average_session_duration_minutes', 0)
-            f.write(f"Average Session Duration: {avg_duration:.2f} minutes ({avg_duration/60:.2f} hours)\n")
-            
-            total_hours = stats.get('total_usage_hours', 0)
-            f.write(f"Total Usage Time: {total_hours:.2f} hours ({total_hours/24:.2f} days)\n\n")
-            
-            f.write("=" * 60 + "\n")
-        
-        print(f"Summary report saved to: {filepath}")
-        return filepath
+            print(f"Summary report saved to: {filepath}")
+            return filepath
+        except IOError as e:
+            print(f"Error writing summary report: {e}")
+            raise
     
     def create_all_visualizations(self, heatmap_data: Tuple[np.ndarray, List[str], List[str]],
                                  host_heatmap_data: Tuple[np.ndarray, List[str], List[str]],

@@ -10,6 +10,9 @@ from bigstat42.visualizer import Visualizer
 
 def generate_sample_data(num_days=7, sessions_per_day=50):
     """Generate sample location log data for testing"""
+    # Set random seed for reproducible demo data
+    random.seed(42)
+    
     location_logs = []
     
     # Sample hosts (computer names in cluster)

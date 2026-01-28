@@ -152,12 +152,18 @@ class API42Client:
         Get location logs for a campus for the last N days
         
         Args:
-            campus_id: The campus ID
-            days_back: Number of days to look back
+            campus_id: The campus ID (must be positive)
+            days_back: Number of days to look back (must be between 1 and 365)
             
         Returns:
             List of location log dictionaries
         """
+        if campus_id <= 0:
+            raise ValueError("campus_id must be a positive integer")
+        
+        if days_back < 1 or days_back > 365:
+            raise ValueError("days_back must be between 1 and 365")
+        
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days_back)
         

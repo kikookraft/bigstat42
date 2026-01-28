@@ -12,6 +12,10 @@ from collections import defaultdict
 class UsageAnalyzer:
     """Analyze cluster usage data and generate statistics"""
     
+    # Maximum valid session duration in minutes (12 hours)
+    # Sessions longer than this are likely errors (forgot to log out, etc.)
+    MAX_VALID_SESSION_DURATION_MINUTES = 720
+    
     def __init__(self, location_logs: List[Dict]):
         """
         Initialize the analyzer with location logs
@@ -46,11 +50,9 @@ class UsageAnalyzer:
         df = pd.DataFrame(data)
         
         # Calculate session duration in minutes
-        df['duration'] = df.apply(
-            lambda row: (row['end_at'] - row['begin_at']).total_seconds() / 60 
-            if row['end_at'] and row['end_at'] > row['begin_at'] 
-            else 0,
-            axis=1
+        df['duration'] = ((df['end_at'] - df['begin_at']).dt.total_seconds() / 60).where(
+            (df['end_at'].notna()) & (df['end_at'] > df['begin_at']), 
+            0
         )
         
         # Extract time components for analysis
@@ -136,7 +138,7 @@ class UsageAnalyzer:
             return 0.0
         
         # Filter out very long sessions (likely errors or forgot to log out)
-        valid_durations = self.df[self.df['duration'] < 720]['duration']  # Less than 12 hours
+        valid_durations = self.df[self.df['duration'] < self.MAX_VALID_SESSION_DURATION_MINUTES]['duration']
         
         if valid_durations.empty:
             return 0.0
@@ -154,7 +156,7 @@ class UsageAnalyzer:
             return {}
         
         # Filter out very long sessions
-        valid_df = self.df[self.df['duration'] < 720]
+        valid_df = self.df[self.df['duration'] < self.MAX_VALID_SESSION_DURATION_MINUTES]
         
         if valid_df.empty:
             return {}
@@ -247,7 +249,7 @@ class UsageAnalyzer:
                 'date_range': 'No data'
             }
         
-        total_duration = self.df[self.df['duration'] < 720]['duration'].sum()
+        total_duration = self.df[self.df['duration'] < self.MAX_VALID_SESSION_DURATION_MINUTES]['duration'].sum()
         
         return {
             'total_sessions': len(self.df),
