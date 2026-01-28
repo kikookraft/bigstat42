@@ -2,6 +2,8 @@
 
 Get comprehensive statistics and visualizations from 42 school cluster usage data.
 
+> 📚 **New to bigstat42?** Check out the [Quick Start Guide](QUICKSTART.md) for a step-by-step tutorial!
+
 ## Features
 
 - 📊 **Fetch data from 42 API** - Retrieve location logs and user activity
