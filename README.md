@@ -18,6 +18,8 @@ Get comprehensive statistics and visualizations from 42 school cluster usage dat
 
 ## Installation
 
+### Method 1: Standard Installation
+
 1. Clone the repository:
 ```bash
 git clone https://github.com/kikookraft/bigstat42.git
@@ -29,7 +31,21 @@ cd bigstat42
 pip install -r requirements.txt
 ```
 
-3. Set up your API credentials:
+### Method 2: Install as a Package
+
+Install the package and all dependencies:
+```bash
+pip install -e .
+```
+
+Then you can run it from anywhere:
+```bash
+bigstat42 --help
+```
+
+### Configuration
+
+Set up your API credentials:
    - Copy `.env.example` to `.env`
    - Get your API credentials from https://profile.intra.42.fr/oauth/applications
    - Edit `.env` and add your credentials:
@@ -40,6 +56,15 @@ CAMPUS_ID=1
 ```
 
 ## Usage
+
+### Demo (No API Credentials Required)
+
+Try the application with sample data to see what it can do:
+```bash
+python demo.py
+```
+
+This will generate sample cluster usage data and create all visualizations in the `demo_output/` directory. Perfect for testing and understanding the output before setting up API credentials!
 
 ### Basic Usage
 
