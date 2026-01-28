@@ -35,8 +35,8 @@ Examples:
     parser.add_argument(
         '--campus',
         type=int,
-        default=1,
-        help='Campus ID (default: 1 for Paris)'
+        default=9,
+        help='Campus ID (default: 7 for Lyon)'
     )
     
     parser.add_argument(
