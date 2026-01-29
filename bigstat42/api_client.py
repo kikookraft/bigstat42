@@ -66,7 +66,7 @@ class API42Client:
         
         return response.json()
     
-    def _paginated_request(self, endpoint: str, params: Optional[Dict] = None, max_pages: int = 100) -> List[Dict]:
+    def _paginated_request(self, endpoint: str, params: Optional[Dict] = None, max_pages: int = 10000) -> List[Dict]:
         """Make paginated requests to the API"""
         if params is None:
             params = {}
