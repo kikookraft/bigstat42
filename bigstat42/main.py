@@ -101,7 +101,7 @@ Examples:
             print("\n⚠ No location data found for the specified period.")
             print("Please check:")
             print("  - Your API credentials have the correct permissions")
-            print("  - The campus ID is correct (common IDs: 1=Paris, 9=Fremont, etc.)")
+            print("  - The campus ID is correct (common IDs: 1=Paris, 9=Lyon, etc.)")
             print("  - Visit https://api.intra.42.fr/apidoc/guides/web_application_flow for API docs")
             print("  - There is activity data for the specified time period")
             return 1
