@@ -36,13 +36,13 @@ Examples:
         '--campus',
         type=int,
         default=9,
-        help='Campus ID (default: 7 for Lyon)'
+        help='Campus ID (default: 9 for Lyon)'
     )
     
     parser.add_argument(
         '--days',
         type=int,
-        default=7,
+        default=60,
         help='Number of days to analyze (default: 7, max: 365)'
     )
     
