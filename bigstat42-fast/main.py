@@ -146,32 +146,48 @@ class Computer:
     def __repr__(self) -> str:
         return f"Computer(name={self.name}, position={self.position}, total_usage={self.get_total_usage()}s, sessions={len(self.sessions)})"
     
-    def to_dict(self) -> dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]:
+    def to_dict(self, first_timestamp: int | None) -> dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]:
+        if first_timestamp is None:
+            first_timestamp = 0
+        # start all the stats from the first timestamp known in the database and adjust accordingly
+        time_range = datetime.now() - datetime.fromtimestamp(first_timestamp / 1000)
+        if time_range < timedelta(days=30):
+            timedelta_30d = time_range
+        else:
+            timedelta_30d = timedelta(days=30)
+        if time_range < timedelta(days=7):
+            timedelta_7d = time_range
+        else:
+            timedelta_7d = timedelta(days=7)
+        if time_range < timedelta(days=1):
+            timedelta_1d = time_range
+        else:
+            timedelta_1d = timedelta(days=1)
         return {
             "name": self.name,
             "position": self.position,
             "sessions": [s.to_dict() for s in self.sessions],
             "1d_stats": {
-                "session_count": self.get_session_number(timedelta(days=1)),
-                "usage_percentage": self.get_usage_percentage(timedelta(days=1)),
-                "average_session_duration": self.average_session_duration(timedelta(days=1)) if self.average_session_duration(timedelta(days=1)) else None
+                "session_count": self.get_session_number(timedelta_1d),
+                "usage_percentage": self.get_usage_percentage(timedelta_1d),
+                "average_session_duration": self.average_session_duration(timedelta_1d) if self.average_session_duration(timedelta_1d) else None
             },
             "7d_stats": {
-                "session_count": self.get_session_number(timedelta(days=7)),
-                "usage_percentage": self.get_usage_percentage(timedelta(days=7)),
-                "average_session_duration": self.average_session_duration(timedelta(days=7)) if self.average_session_duration(timedelta(days=7)) else None
+                "session_count": self.get_session_number(timedelta_7d),
+                "usage_percentage": self.get_usage_percentage(timedelta_7d),
+                "average_session_duration": self.average_session_duration(timedelta_7d) if self.average_session_duration(timedelta_7d) else None
             },
             "30d_stats": {
-                "session_count": self.get_session_number(timedelta(days=30)),
-                "usage_percentage": self.get_usage_percentage(timedelta(days=30)),
-                "average_session_duration": self.average_session_duration(timedelta(days=30)) if self.average_session_duration(timedelta(days=30)) else None
+                "session_count": self.get_session_number(timedelta_30d),
+                "usage_percentage": self.get_usage_percentage(timedelta_30d),
+                "average_session_duration": self.average_session_duration(timedelta_30d) if self.average_session_duration(timedelta_30d) else None
             },
             "all_time_stats": {
                 "session_count": self.get_session_number(),
-                "usage_percentage": self.get_usage_percentage(timedelta(days=365*10)),  # assuming 10 years as "all time"
-                "average_session_duration": self.average_session_duration(timedelta(days=365*10)) if self.average_session_duration(timedelta(days=365*10)) else None
+                "usage_percentage": self.get_usage_percentage(time_range),  # assuming 10 years as "all time"
+                "average_session_duration": self.average_session_duration(time_range) if self.average_session_duration() else None
             },
-            "total_usage_seconds": self.get_total_usage()
+            "total_usage_seconds": round(self.get_total_usage())
         }
 
 class Row:
@@ -194,10 +210,10 @@ class Row:
     def __repr__(self) -> str:
         return f"Row(row_number={self.row_number}, computers={list(self.computers.keys())})"
     
-    def to_dict(self) -> dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]:
+    def to_dict(self, first_timestamp: int | None) -> dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]:
         return {
             "row_number": self.row_number,
-            "computers": [comp.to_dict() for comp in self.computers.values()]
+            "computers": [comp.to_dict(first_timestamp) for comp in self.computers.values()]
         }
 
 class Zone:
@@ -215,10 +231,10 @@ class Zone:
     def __repr__(self) -> str:
         return f"Zone(zone_name={self.zone_name}, rows={list(self.rows.keys())})"
     
-    def to_dict(self) -> dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]:
+    def to_dict(self, first_timestamp: int | None) -> dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]:
         return {
             "zone_name": self.zone_name,
-            "rows": [row.to_dict() for row in self.rows.values()]
+            "rows": [row.to_dict(first_timestamp) for row in self.rows.values()]
         }
 
 class Cluster:
@@ -235,9 +251,9 @@ class Cluster:
     def __repr__(self) -> str:
         return f"Cluster(zones={list(self.zones.keys())})"
     
-    def to_dict(self) -> dict[str, list[dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]]]:
+    def to_dict(self, first_timestamp: int | None) -> dict[str, list[dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]]]:
         return {
-            "zones": [zone.to_dict() for zone in self.zones.values()]
+            "zones": [zone.to_dict(first_timestamp) for zone in self.zones.values()]
         }
 
 
@@ -250,6 +266,14 @@ def fetch_data(url: str) -> dict[str, list[dict[str, int | str | None]]]:
     except requests.RequestException as e:
         print(f"Error fetching data: {e}", file=sys.stderr)
         return {}
+    
+def get_first_timestamp(json_data: dict[str, list[dict[str, int | str | None]]]) -> int | None:
+    """Get the earliest startTime from the session data."""
+    sessions = json_data.get("sessions", [])
+    if not sessions:
+        return None
+    first_timestamp = min(session["startTime"] for session in sessions if "startTime" in session and isinstance(session["startTime"], int))
+    return first_timestamp
 
 def build_cluster(data: dict[str, list[dict[str, int | str | None]]]) -> Cluster:
     """Build the cluster structure from raw session data."""
@@ -326,10 +350,10 @@ def main():
 
     if args.output:
         with open(args.output, "w") as f:
-            json.dump(cluster.to_dict(), f, indent=4)
+            json.dump(cluster.to_dict(get_first_timestamp(data)), f, indent=4)
     else:
         with open("cluster.json", "w") as f:
-            json.dump(cluster.to_dict(), f, indent=4)
+            json.dump(cluster.to_dict(get_first_timestamp(data)), f, indent=4)
 
 if __name__ == "__main__":
     main()
