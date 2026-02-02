@@ -1,197 +1,144 @@
-# bigstat42
+# Cluster Visualizer
 
-Get comprehensive statistics and visualizations from 42 school cluster usage data.
+A pygame-based interactive heatmap visualization for 42 cluster usage statistics.
 
-> 📚 **New to bigstat42?** Check out the [Quick Start Guide](QUICKSTART.md) for a step-by-step tutorial!
+## Overview
+
+This tool creates a visual representation of the cluster layout, mimicking the actual physical layout with zones, rows, and individual computer positions. Each computer is color-coded based on its usage percentage, creating an intuitive heatmap.
 
 ## Features
 
-- 📊 **Fetch data from 42 API** - Retrieve location logs and user activity
-- 🔥 **Heatmaps** - Visual representation of cluster usage patterns
-  - Day of week vs Hour of day heatmap
-  - Top computers vs Hour of day heatmap
-- 📈 **Statistics** - Comprehensive usage analytics
-  - Hourly usage patterns
-  - Daily usage patterns (by day of week)
-  - Weekly and monthly trends
-  - Average session duration per computer
-  - Total usage time and sessions
-- 🎯 **Flexible Analysis** - Analyze data for any time period (days, weeks, months)
+- **Interactive Heatmap**: Visual representation of cluster usage with color-coded computers
+- **Multiple Time Windows**: View statistics for 1 day, 7 days, 30 days, or all-time
+- **Hover Tooltips**: Detailed information for each computer on hover
+- **Real Layout**: Mimics the actual cluster layout with zones Z1-Z4
+- **Export Function**: Save screenshots of the current view
 
 ## Installation
 
-### Method 1: Standard Installation
-
-1. Clone the repository:
+Make sure to use a virtual environment and install the required dependencies:
 ```bash
-git clone https://github.com/kikookraft/bigstat42.git
-cd bigstat42
-```
-
-2. Install dependencies:
-```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Method 2: Install as a Package
-
-Install the package and all dependencies:
-```bash
-pip install -e .
-```
-
-Then you can run it from anywhere:
-```bash
-bigstat42 --help
-```
-
-### Configuration
-
-Set up your API credentials:
-   - Copy `.env.example` to `.env`
-   - Get your API credentials from https://profile.intra.42.fr/oauth/applications
-   - Edit `.env` and add your credentials:
-```bash
-API_UID=your_api_uid_here
-API_SECRET=your_api_secret_here
-CAMPUS_ID=1
-```
-
-## Usage
-
-### Demo (No API Credentials Required)
-
-Try the application with sample data to see what it can do:
-```bash
-python demo.py
-```
-
-This will generate sample cluster usage data and create all visualizations in the `demo_output/` directory. Perfect for testing and understanding the output before setting up API credentials!
-
 ### Basic Usage
 
-Analyze the last 7 days of cluster usage:
+The `fetch_data.py` script generates a `cluster.json` file containing the cluster usage data. You can then visualize this data using the `visualize.py` script.
+
+You can directly use `visualize.py` to generate and see the visualization in one step.
 ```bash
-python run.py
+python visualize.py
 ```
-
-Or using the module directly:
+If you already have a `cluster.json` file, you can specify it as follows:
 ```bash
-python -m bigstat42.main
+python visualize.py cluster.json
 ```
+If no json file is provided, it defaults to `cluster.json`.  
+If the file does not exist, the program generate it with `fetch_data.py`
 
-### Command Line Options
+### With Time Window Selection
 
 ```bash
-python run.py --campus CAMPUS_ID --days DAYS --output OUTPUT_DIR
+python visualize.py cluster.json --time-window 7d
 ```
 
-**Options:**
-- `--campus`: Campus ID (default: 1 for Paris)
-- `--days`: Number of days to analyze (default: 7)
-- `--output`: Output directory for visualizations (default: output)
-- `--uid`: API UID (optional, overrides .env)
-- `--secret`: API Secret (optional, overrides .env)
+Available time windows:
+- `1d` - Last 24 hours (keyboard shortcut: `1`)
+- `7d` - Last 7 days (default) (keyboard shortcut: `7`)
+- `30d` - Last 30 days (keyboard shortcut: `3`)
+- `all_time` - All available data (keyboard shortcut: `A`)
 
-### Examples
+### Example
 
-Analyze the last 30 days:
 ```bash
-python run.py --days 30
+# Generate data
+python main.py --url https://api.raraph.fr/intra-metrics/sessions
+
+# Visualize with 7-day window
+python visualize.py cluster.json --time-window 7d
 ```
 
-Analyze a specific campus for the last 14 days:
-```bash
-python run.py --campus 9 --days 14
+## Keyboard Controls
+
+While the visualizer is running:
+
+| Key | Action |
+|-----|--------|
+| `1` | Switch to 1-day view |
+| `7` | Switch to 7-day view |
+| `3` | Switch to 30-day view |
+| `A` | Switch to all-time view |
+| `E` | Export current view as PNG |
+| `R` | Refresh data from JSON file |
+| `Q` or `ESC` | Quit the application |
+
+## Color Legend
+
+The heatmap uses a color gradient to represent usage:
+
+- **Light Blue** (0%): Unused or minimal usage
+- **Blue** (25%): Low usage
+- **Green** (50%): Medium usage
+- **Orange** (75%): High usage
+- **Red** (100%): Very high usage / constantly in use
+
+## Layout
+
+The visualizer displays the cluster in two floors:
+
+### Upper Floor
+- **Z2** (left): 12 rows, positions 1-8
+- **Z1** (right): 12 rows, positions 1-5
+
+### Lower Floor
+- **Z4** (left): 13 rows, positions 1-7
+- **Z3** (right): 13 rows, positions 1-6
+
+Each computer shows its position number and is colored based on usage percentage.
+
+## Tooltip Information
+
+When hovering over a computer, you'll see:
+- **Computer Name**: e.g., "z1r12p1"
+- **Usage Percentage**: How much the computer was used in the selected time window
+- **Session Count**: Number of login sessions
+- **Average Duration**: Average session length in hours
+
+## Export
+
+Press `E` to export the current view as a PNG image. The file will be saved with a timestamp:
+```
+cluster_heatmap_7d_20260202_143022.png
 ```
 
-Save results to a custom directory:
-```bash
-python run.py --days 7 --output my_statistics
-```
+## Technical Details
 
-Use custom API credentials:
-```bash
-python run.py --uid YOUR_UID --secret YOUR_SECRET --days 7
-```
+### Data Source
+The visualizer reads the JSON file generated by `fetch_data.py`, which contains:
+- Session data for each computer
+- Pre-calculated statistics for different time windows
+- Usage percentages, session counts, and average durations
 
-## Output
+### Performance
+- Runs at 30 FPS for smooth interaction
+- Efficient rendering with pygame (and because I only know to use pygame)
+- Real-time tooltip updates on mouse movement
 
-The application generates the following files in the output directory:
+## Troubleshooting
 
-### Visualizations
-- `usage_heatmap_day_hour.png` - Heatmap showing usage patterns by day of week and hour
-- `usage_heatmap_hosts_hour.png` - Heatmap showing top 20 most used computers by hour
-- `hourly_usage.png` - Bar chart of usage by hour of day
-- `daily_usage.png` - Bar chart of usage by day of week
-- `top_hosts.png` - Top 20 most used computers
 
-### Reports
-- `summary.txt` - Text summary with key statistics
+### Window Too Large
+The visualization is designed for standard desktop displays (1920x1080 or larger). If the window is too large for your screen, you can modify the `COMPUTER_SIZE` and spacing constants in the code.
 
-## API Information
+## Future Enhancements
 
-This application uses the 42 API v2. You need to create an application on your 42 profile to get API credentials:
-
-1. Go to https://profile.intra.42.fr/oauth/applications
-2. Create a new application
-3. Copy the UID and SECRET
-4. Add them to your `.env` file
-
-**API Permissions**: Make sure your API application has the necessary permissions to read location data.
-
-## Requirements
-
-- Python 3.7+
-- requests
-- pandas
-- numpy
-- matplotlib
-- seaborn
-- python-dotenv
-
-All dependencies are listed in `requirements.txt`.
-
-## Project Structure
-
-```
-bigstat42/
-├── bigstat42/
-│   ├── __init__.py       # Package initialization
-│   ├── api_client.py     # 42 API client
-│   ├── analyzer.py       # Data analysis and statistics
-│   ├── visualizer.py     # Visualization generation
-│   └── main.py           # Main application
-├── run.py                # Entry point script
-├── requirements.txt      # Python dependencies
-├── .env.example          # Example configuration
-├── .gitignore            # Git ignore rules
-└── README.md             # This file
-```
-
-## Statistics Generated
-
-The application provides the following statistics:
-
-- **Total Sessions**: Number of login sessions
-- **Unique Users**: Number of different users
-- **Unique Hosts**: Number of different computers used
-- **Average Session Duration**: Average time spent per session
-- **Total Usage Time**: Cumulative usage time
-- **Hourly Distribution**: Usage patterns throughout the day
-- **Daily Distribution**: Usage patterns throughout the week
-- **Weekly Trends**: Usage by week number
-- **Monthly Trends**: Usage by month
-- **Per-Host Statistics**: Average session duration per computer
+Potential features for future versions:
+- Click to show detailed computer history
+- Time-based animation showing usage over time
+- Compare different time periods
+- Real-time updates when new data is available
 
 ## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Author
-
-kikookraft
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
