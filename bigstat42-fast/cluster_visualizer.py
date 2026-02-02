@@ -16,7 +16,8 @@ COLOR_BACKGROUND = (240, 240, 240)
 COLOR_TEXT = (80, 80, 80)
 COLOR_ZONE_LABEL = (50, 50, 50)
 COLOR_ROW_LABEL = (150, 150, 150)
-COLOR_COMPUTER_BORDER = (100, 100, 100)
+COLOR_COMPUTER_BORDER = (30, 30, 30)
+COLOR_USED = (70, 200, 70)
 COLOR_DISABLED = (200, 200, 200)
 
 # Heatmap colors (from cold/unused to hot/heavily used)
@@ -64,7 +65,7 @@ ZONE_LAYOUTS = {
 }
 
 
-def interpolate_color(value: float) -> Tuple[int, int, int]:
+def interpolate_color(value: float, max_value: float = 100.0) -> Tuple[int, int, int]:
     """
     Interpolate color based on usage percentage (0-100)
     Returns RGB tuple
@@ -73,10 +74,15 @@ def interpolate_color(value: float) -> Tuple[int, int, int]:
         value = 0
     if value > 100:
         value = 100
+
+    if max_value <= 0:
+        max_value = 100.0
+    if value >= max_value:
+        return HEATMAP_COLORS[-1]
     
     # Determine which color segment we're in
     segment_count = len(HEATMAP_COLORS) - 1
-    segment = value / 100.0 * segment_count
+    segment = value / max_value * segment_count
     segment_index = int(segment)
     
     if segment_index >= segment_count:
@@ -93,18 +99,39 @@ def interpolate_color(value: float) -> Tuple[int, int, int]:
     
     return (r, g, b)
 
+def get_max_percentage_used(cluster_data: Dict, time_window: str = "7d") -> float:
+    """Get the maximum usage percentage across all computers for scaling"""
+    max_used = 0.0
+    stats_key = f"{time_window}_stats"
+    for zone in cluster_data.get("zones", []):
+        for row in zone.get("rows", []):
+            for computer in row.get("computers", []):
+                stats = computer.get(stats_key, {})
+                usage = stats.get("usage_percentage", 0.0)
+                if usage > max_used:
+                    max_used = usage
+    return max_used
+
+def is_computer_used(computer_data: Dict) -> bool:
+    """Determine if a computer is currently in use (has an active session)"""
+    sessions = computer_data.get("sessions", [])
+    for session in sessions:
+        if session.get("end_time") is None:
+            return True
+    return False
 
 class ComputerRect:
     """Represents a computer position on screen"""
     def __init__(self, name: str, position: int, rect: pygame.Rect, 
-                 usage_percent: float, session_count: int, avg_duration: Optional[float]):
+                 usage_percent: float, session_count: int, avg_duration: Optional[float], max_usage: float = 100.0, is_used: bool = False):
         self.name = name
         self.position = position
         self.rect = rect
         self.usage_percent = usage_percent
         self.session_count = session_count
         self.avg_duration = avg_duration
-        self.color = interpolate_color(usage_percent)
+        self.color = interpolate_color(usage_percent, max_usage)
+        self.is_used = is_used
     
     def draw(self, screen: pygame.Surface, font: pygame.font.Font):
         """Draw the computer rectangle with heatmap color"""
@@ -112,7 +139,10 @@ class ComputerRect:
         pygame.draw.rect(screen, self.color, self.rect)
         
         # Draw border
-        pygame.draw.rect(screen, COLOR_COMPUTER_BORDER, self.rect, 2)
+        if self.is_used:
+            pygame.draw.rect(screen, COLOR_USED, self.rect, 3)
+        else:
+            pygame.draw.rect(screen, COLOR_COMPUTER_BORDER, self.rect, 2)
         
         # Draw position number
         text = font.render(str(self.position), True, COLOR_TEXT)
@@ -138,6 +168,7 @@ class ClusterVisualizer:
         self.cluster_data = None
         self.computer_rects: List[ComputerRect] = []
         self.hovered_computer: Optional[ComputerRect] = None
+        self.max_usage = 100.0  # Default max usage for color scaling
         
         # Load data
         self.load_data()
@@ -163,6 +194,7 @@ class ClusterVisualizer:
             with open(self.json_file, 'r') as f:
                 self.cluster_data = json.load(f)
             print(f"Loaded cluster data from {self.json_file}")
+            self.max_usage = get_max_percentage_used(self.cluster_data, self.time_window)
         except Exception as e:
             print(f"Error loading JSON file: {e}", file=sys.stderr)
             sys.exit(1)
@@ -205,6 +237,8 @@ class ClusterVisualizer:
         if not self.cluster_data or "zones" not in self.cluster_data:
             print("No zone data found")
             return
+        
+        self.max_usage = get_max_percentage_used(self.cluster_data, self.time_window)
         
         # Organize zones
         zones_dict = {zone["zone_name"]: zone for zone in self.cluster_data["zones"]}
@@ -253,7 +287,9 @@ class ClusterVisualizer:
                     rect,
                     usage_percent,
                     session_count,
-                    avg_duration
+                    avg_duration,
+                    self.max_usage,
+                    is_used=is_computer_used(computer)
                 )
                 self.computer_rects.append(computer_rect)
     
@@ -291,13 +327,13 @@ class ClusterVisualizer:
     def draw_floor_labels(self):
         """Draw floor labels (Upper/Lower)"""
         # Upper floor
-        upper_text = self.font_medium.render("UPPER FLOOR", True, COLOR_ZONE_LABEL)
-        self.screen.blit(upper_text, (20, MARGIN_TOP))
+        # upper_text = self.font_medium.render("UPPER FLOOR", True, COLOR_ZONE_LABEL)
+        # self.screen.blit(upper_text, (20, MARGIN_TOP))
         
         # Lower floor
-        floor_offset = 13 * (COMPUTER_SIZE + ROW_SPACING) + ZONE_SPACING
-        lower_text = self.font_medium.render("LOWER FLOOR", True, COLOR_ZONE_LABEL)
-        self.screen.blit(lower_text, (20, MARGIN_TOP + floor_offset))
+        # floor_offset = 13 * (COMPUTER_SIZE + ROW_SPACING) + ZONE_SPACING
+        # lower_text = self.font_medium.render("LOWER FLOOR", True, COLOR_ZONE_LABEL)
+        # self.screen.blit(lower_text, (20, MARGIN_TOP + floor_offset))
     
     def draw_zone_labels(self):
         """Draw zone labels"""
