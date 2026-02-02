@@ -18,9 +18,9 @@ This tool creates a visual representation of the cluster layout, mimicking the a
 
 Make sure to use a virtual environment and install the required dependencies:
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
 ### Basic Usage
@@ -29,11 +29,11 @@ The `fetch_data.py` script generates a `cluster.json` file containing the cluste
 
 You can directly use `visualize.py` to generate and see the visualization in one step.
 ```bash
-python visualize.py
+python3 visualize.py
 ```
 If you already have a `cluster.json` file, you can specify it as follows:
 ```bash
-python visualize.py cluster.json
+python3 visualize.py cluster.json
 ```
 If no json file is provided, it defaults to `cluster.json`.  
 If the file does not exist, the program generate it with `fetch_data.py`
@@ -41,7 +41,7 @@ If the file does not exist, the program generate it with `fetch_data.py`
 ### With Time Window Selection
 
 ```bash
-python visualize.py cluster.json --time-window 7d
+python3 visualize.py cluster.json --time-window 7d
 ```
 
 Available time windows:
@@ -54,10 +54,10 @@ Available time windows:
 
 ```bash
 # Generate data
-python main.py --url https://api.raraph.fr/intra-metrics/sessions
+python3 fetch_data.py --url https://api.raraph.fr/intra-metrics/sessions
 
 # Visualize with 7-day window
-python visualize.py cluster.json --time-window 7d
+python3 visualize.py cluster.json --time-window 7d
 ```
 
 ## Keyboard Controls
