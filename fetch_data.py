@@ -67,11 +67,12 @@ class Session:
         return f"Session(host={self.host}, start_time={self.start_time}, end_time={self.end_time})"
     
     def to_dict(self) -> dict[str, str | float | None]:
+        duration = self.get_duration()
         return {
             "host": self.host,
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat() if self.end_time else None,
-            "duration": self.get_duration()
+            "duration": round(duration) if duration is not None else None
         }
 
 class Computer:
@@ -99,7 +100,8 @@ class Computer:
         used_time = 0.0
         for session in self.sessions:
             session_start = session.get_start_time()
-            session_end = session.get_end_time() if session.get_end_time() is not None else now
+            session_end_raw = session.get_end_time()
+            session_end = session_end_raw if session_end_raw is not None else now
             
             # Only count sessions that overlap with the time window
             if session_end >= window_start and session_start <= now:
@@ -115,8 +117,12 @@ class Computer:
 
     def get_total_usage(self) -> int:
         """Calculate total usage time across all sessions"""
-        total_usage = sum((s.get_duration() for s in self.sessions if s.get_duration()), 0)
-        return total_usage
+        total_usage: float = 0.0
+        for session in self.sessions:
+            duration = session.get_duration()
+            if duration:
+                total_usage += duration
+        return int(total_usage)
     
     def average_session_duration(self, time_window: timedelta = timedelta()) -> int | None:
         """Calculate average session duration"""
