@@ -128,8 +128,9 @@ class Computer:
         """Calculate average session duration"""
         if not self.sessions:
             return None
-        total_duration = sum((s.get_duration() for s in self.sessions if s.get_duration()), 0)
-        return round(total_duration / len(self.sessions))
+        sesssions_in_window: list[Session] = [s for s in self.sessions if (s.get_start_time() >= datetime.now() - time_window) or time_window == timedelta()]
+        total_duration: float = sum(s.get_duration() or 0 for s in sesssions_in_window)
+        return round(total_duration / len(sesssions_in_window)) if sesssions_in_window else None
     
     def get_session_number(self, time_window: timedelta = timedelta()) -> int:
         """Get number of sessions in a given time window"""
@@ -257,7 +258,7 @@ class Cluster:
     def __repr__(self) -> str:
         return f"Cluster(zones={list(self.zones.keys())})"
     
-    def to_dict(self, first_timestamp: int | None) -> dict[str, list[dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]]]:
+    def to_dict(self, first_timestamp: int | None) -> dict[str, list[dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]] | str]:
         return {
             "zones": [zone.to_dict(first_timestamp) for zone in self.zones.values()],
             "last_update": datetime.now().isoformat(sep=" ", timespec="seconds")
@@ -347,7 +348,7 @@ def build_cluster(data: dict[str, list[dict[str, int | str | None]]]) -> Cluster
     return cluster
 
 def main():
-    parser = argparse.ArgumentParser(description="Fetch and analyze cluster usage statistics from 42 API")
+    parser = argparse.ArgumentParser(description="Fetch and analyze cluster usage statistics from 42 custom API")
     parser.add_argument("--url", type=str, default=URL, help="URL to fetch session data from")
     parser.add_argument("--output", type=str, help="Output file to save the cluster data as JSON")
     args = parser.parse_args()

@@ -11,7 +11,7 @@ import sys
 import argparse
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 # Color definitions
 COLOR_BACKGROUND = (240, 240, 240)
@@ -43,11 +43,11 @@ MARGIN_BOTTOM = 50
 
 # Zone layouts (which zones are on each floor)
 # Based on the images provided: Z2, Z1 on upper floor; Z4, Z3 on lower floor
-UPPER_ZONES = ["z2", "z1"]
-LOWER_ZONES = ["z4", "z3"]
+UPPER_ZONES: list[str] = ["z2", "z1"]
+LOWER_ZONES: list[str] = ["z4", "z3"]
 
 # Computer positions per zone (approximate layout from images)
-ZONE_LAYOUTS = {
+ZONE_LAYOUTS: dict[str, dict[str, list[int] | int]] = {
     "z1": {
         "positions_per_row": [0, 2, 3, 4, 5],  # R1: positions 2-5, R2-R12: varies
         "max_position": 5
@@ -101,7 +101,7 @@ def interpolate_color(value: float, max_value: float = 100.0) -> Tuple[int, int,
     
     return (r, g, b)
 
-def get_max_percentage_used(cluster_data: Dict, time_window: str = "7d") -> float:
+def get_max_percentage_used(cluster_data: Dict[str, Any], time_window: str = "7d") -> float:
     """Get the maximum usage percentage across all computers for scaling"""
     max_used = 0.0
     stats_key = f"{time_window}_stats"
@@ -114,7 +114,7 @@ def get_max_percentage_used(cluster_data: Dict, time_window: str = "7d") -> floa
                     max_used = usage
     return max_used
 
-def is_computer_used(computer_data: Dict) -> bool:
+def is_computer_used(computer_data: Dict[str, Any]) -> bool:
     """Determine if a computer is currently in use (has an active session)"""
     sessions = computer_data.get("sessions", [])
     for session in sessions:
@@ -219,7 +219,7 @@ class ClusterVisualizer:
         self.screen_width = max_width
         self.screen_height = max_height
     
-    def get_computer_stats(self, computer_data: Dict) -> Tuple[float, int, Optional[float]]:
+    def get_computer_stats(self, computer_data: Dict[str, Any]) -> Tuple[float, int, Optional[float]]:
         """Extract statistics based on selected time window"""
         stats_key = f"{self.time_window}_stats"
         
@@ -252,7 +252,7 @@ class ClusterVisualizer:
         floor_offset = 13 * (COMPUTER_SIZE + ROW_SPACING) + ZONE_SPACING
         self.draw_floor(zones_dict, LOWER_ZONES, floor_offset)
     
-    def draw_floor(self, zones_dict: Dict, zone_names: List[str], y_offset: int):
+    def draw_floor(self, zones_dict: Dict[str, Any], zone_names: List[str], y_offset: int):
         """Draw a floor with multiple zones"""
         for idx, zone_name in enumerate(zone_names):
             if zone_name not in zones_dict:
@@ -263,9 +263,8 @@ class ClusterVisualizer:
             
             self.draw_zone(zone_data, MARGIN_LEFT + x_offset, MARGIN_TOP + y_offset)
     
-    def draw_zone(self, zone_data: Dict, start_x: int, start_y: int):
+    def draw_zone(self, zone_data: Dict[str, Any], start_x: int, start_y: int):
         """Draw a single zone with all its rows"""
-        zone_name = zone_data["zone_name"]
         rows = sorted(zone_data.get("rows", []), key=lambda r: r["row_number"])
         
         for row in rows:
