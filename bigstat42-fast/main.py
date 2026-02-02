@@ -33,7 +33,7 @@ def check_overlap(session1: 'Session', session2: 'Session') -> bool:
 
 class Session:
     """Class representing a single session on a host."""
-    def __init__(self, host: str, start_time: int, end_time: int) -> None:
+    def __init__(self, host: str, start_time: int, end_time: int | None) -> None:
         self.host = host
         self.start_time = datetime.fromtimestamp(start_time / 1000)
         self.end_time = datetime.fromtimestamp(end_time / 1000) if end_time is not None else None
@@ -63,6 +63,14 @@ class Session:
     
     def __repr__(self) -> str:
         return f"Session(host={self.host}, start_time={self.start_time}, end_time={self.end_time})"
+    
+    def to_dict(self) -> dict[str, str | float | None]:
+        return {
+            "host": self.host,
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "duration": self.duration_value.total_seconds() if self.duration_value else None
+        }
 
 class Computer:
     """Individual computer with its sessions"""
@@ -87,12 +95,19 @@ class Computer:
     def get_total_usage(self) -> timedelta:
         return self.total_usage
     
-    def average_session_duration(self) -> timedelta | None:
+    def average_session_duration(self, time_window: timedelta = timedelta()) -> timedelta | None:
         """Calculate average session duration"""
         if not self.sessions:
             return None
         total_duration = sum((s.get_duration() for s in self.sessions if s.get_duration()), timedelta())
         return total_duration / len(self.sessions)
+    
+    def get_session_number(self, time_window: timedelta = timedelta()) -> int:
+        """Get number of sessions in a given time window"""
+        if time_window == timedelta():
+            return len(self.sessions)
+        cutoff_time = datetime.now() - time_window
+        return sum(1 for s in self.sessions if s.get_start_time() >= cutoff_time)
     
     def get_session_usage_at_time(self, at_time: datetime) -> float:
         """Calculate usage as float of sessions active at a specific time"""
@@ -100,9 +115,41 @@ class Computer:
             return 0.0
         active_sessions = sum(1 for s in self.sessions if s.is_active(at_time))
         return (active_sessions / len(self.sessions))
+    
+    def has_active_session(self, at_time: datetime) -> bool:
+        """Check if there is any active session at a specific time"""
+        return any(s.is_active(at_time) for s in self.sessions)
 
     def __repr__(self) -> str:
         return f"Computer(name={self.name}, position={self.position}, total_usage={self.total_usage})"
+    
+    def to_dict(self) -> dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]:
+        return {
+            "name": self.name,
+            "position": self.position,
+            "sessions": [s.to_dict() for s in self.sessions],
+            "1d_stats": {
+                "session_count": self.get_session_number(timedelta(days=1)),
+                "usage_percentage": self.get_usage_percentage(timedelta(days=1)),
+                "average_session_duration": self.average_session_duration(timedelta(days=1)).total_seconds() if self.average_session_duration(timedelta(days=1)) else None
+            },
+            "7d_stats": {
+                "session_count": self.get_session_number(timedelta(days=7)),
+                "usage_percentage": self.get_usage_percentage(timedelta(days=7)),
+                "average_session_duration": self.average_session_duration(timedelta(days=7)).total_seconds() if self.average_session_duration(timedelta(days=7)) else None
+            },
+            "30d_stats": {
+                "session_count": self.get_session_number(timedelta(days=30)),
+                "usage_percentage": self.get_usage_percentage(timedelta(days=30)),
+                "average_session_duration": self.average_session_duration(timedelta(days=30)).total_seconds() if self.average_session_duration(timedelta(days=30)) else None
+            },
+            "all_time_stats": {
+                "session_count": self.get_session_number(),
+                "usage_percentage": self.get_usage_percentage(timedelta(days=365*10)),  # assuming 10 years as "all time"
+                "average_session_duration": self.average_session_duration(timedelta(days=365*10)).total_seconds() if self.average_session_duration(timedelta(days=365*10)) else None
+            },
+            "total_usage_seconds": self.total_usage.total_seconds()
+        }
 
 class Row:
     """A row of computers (1-8 computers per row)"""
@@ -116,13 +163,19 @@ class Row:
     def get_computer(self, position: int) -> Computer | None:
         return self.computers.get(position)
     
-    def get_row_usage(self) -> dict[int, float]:
+    def get_row_usage(self, time_window: timedelta = timedelta()) -> dict[int, float]:
         """Get usage percentage for each computer position"""
-        return {pos: comp.get_usage_percentage() 
+        return {pos: comp.get_usage_percentage(time_window) 
                 for pos, comp in self.computers.items()}
     
     def __repr__(self) -> str:
         return f"Row(row_number={self.row_number}, computers={list(self.computers.keys())})"
+    
+    def to_dict(self) -> dict[str, str | int | list[dict[str, str | int | list[dict[str, str | float | None]]]]]:
+        return {
+            "row_number": self.row_number,
+            "computers": [comp.to_dict() for comp in self.computers.values()]
+        }
 
 class Zone:
     """A zone containing multiple rows"""
@@ -136,19 +189,36 @@ class Zone:
     def get_row(self, row_number: int) -> Row | None:
         return self.rows.get(row_number)
     
-    def get_heatmap_data(self) -> np.ndarray:
-        """Generate 2D array for heatmap (rows x positions)"""
-        max_row = max(self.rows.keys()) if self.rows else 0
-        data = np.zeros((max_row, 8))  # Assuming max 8 computers per row
-        
-        for row_num, cluster in self.rows.items():
-            for pos, computer in cluster.computers.items():
-                data[row_num - 1, pos - 1] = computer.get_usage_percentage()
-        
-        return data
+    def __repr__(self) -> str:
+        return f"Zone(zone_name={self.zone_name}, rows={list(self.rows.keys())})"
+    
+    def to_dict(self) -> dict[str, str | int | list[dict[str, str | int | list[dict[str, str | int | list[dict[str, str | float | None]]]]]]]:
+        return {
+            "zone_name": self.zone_name,
+            "rows": [row.to_dict() for row in self.rows.values()]
+        }
+
+class Cluster:
+    """Cluster containing multiple zones"""
+    def __init__(self):
+        self.zones: dict[str, Zone] = {}  # zone_name -> Zone
+    
+    def add_zone(self, zone: Zone) -> None:
+        self.zones[zone.zone_name] = zone
+    
+    def get_zone(self, zone_name: str) -> Zone | None:
+        return self.zones.get(zone_name)
+    
+    def __repr__(self) -> str:
+        return f"Cluster(zones={list(self.zones.keys())})"
+    
+    def to_dict(self) -> dict[str, list[dict[str, str | int | list[dict[str, str | int | list[dict[str, str | int | list[dict[str, str | float | None]]]]]]]]]:
+        return {
+            "zones": [zone.to_dict() for zone in self.zones.values()]
+        }
 
 
-def fetch_data(url: str) -> dict:
+def fetch_data(url: str) -> dict[str, list[dict[str, int | str | None]]]:
     """Fetch data from the given URL and return as JSON."""
     try:
         response: requests.Response = requests.get(url)
@@ -158,3 +228,85 @@ def fetch_data(url: str) -> dict:
         print(f"Error fetching data: {e}", file=sys.stderr)
         return {}
 
+def build_cluster(data: dict[str, list[dict[str, int | str | None]]]) -> Cluster:
+    """Build the cluster structure from raw session data."""
+    cluster = Cluster()
+    for session_data in data.get("sessions", []):
+        host_raw = session_data["host"]
+        start_time_raw = session_data["startTime"]
+        end_time_raw = session_data.get("endTime")
+        
+        # Type validation and conversion
+        if not isinstance(host_raw, str):
+            continue
+        if not isinstance(start_time_raw, int):
+            continue
+            
+        host = host_raw
+        start_time = start_time_raw
+        end_time = int(end_time_raw) if isinstance(end_time_raw, int) else None
+
+        # Parse host format like "z1r12p1" -> zone="z1", row=12, position=1
+        try:
+            parts = host.split('r')
+            if len(parts) < 2:
+                print(f"Warning: Skipping host with unexpected format (missing 'r'): {host}")
+                continue
+            zone_name = parts[0]  # e.g., "z1"
+            
+            row_and_pos = parts[1].split('p')
+            if len(row_and_pos) < 2:
+                print(f"Warning: Skipping host with unexpected format (missing 'p'): {host}")
+                continue
+            row_part = row_and_pos[0]  # e.g., "12"
+            position_part = row_and_pos[1]  # e.g., "1"
+            
+            row_number = int(row_part)
+            position = int(position_part)
+        except (ValueError, IndexError) as e:
+            # Skip hosts that don't match expected format
+            print(f"Warning: Skipping host with parse error: {host} - {e}")
+            continue
+
+        session = Session(host, start_time, end_time)
+
+        zone = cluster.get_zone(zone_name)
+        if not zone:
+            zone = Zone(zone_name)
+            cluster.add_zone(zone)
+
+        row = zone.get_row(row_number)
+        if not row:
+            row = Row(row_number)
+            zone.add_row(row)
+
+        computer = row.get_computer(position)
+        if not computer:
+            computer = Computer(position, host)
+            row.add_computer(computer)
+
+        try:
+            computer.add_session(session)
+        except ValueError as ve:
+            print(f"Warning: {ve}", file=sys.stderr)
+
+    return cluster
+
+def main():
+    parser = argparse.ArgumentParser(description="Fetch and analyze cluster usage statistics from 42 API")
+    parser.add_argument("--url", type=str, default=URL, help="URL to fetch session data from")
+    parser.add_argument("--output", type=str, help="Output file to save the cluster data as JSON")
+    args = parser.parse_args()
+
+    data = fetch_data(args.url)
+    cluster = build_cluster(data)
+
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(cluster.to_dict(), f, indent=4)
+    else:
+        with open("cluster.json", "w") as f:
+            json.dump(cluster.to_dict(), f, indent=4)
+
+if __name__ == "__main__":
+    main()
