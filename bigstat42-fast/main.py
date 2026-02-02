@@ -14,9 +14,7 @@ import requests
 import argparse
 import sys
 from datetime import datetime, timedelta
-from collections import defaultdict
 import json
-import numpy as np
 
 
 def check_overlap(session1: 'Session', session2: 'Session') -> bool:
@@ -46,11 +44,14 @@ class Session:
     def get_start_time(self) -> datetime:   
         return self.start_time
     
-    def get_end_time(self) -> datetime:
+    def get_end_time(self) -> datetime | None:
         return self.end_time
     
-    def get_duration(self) -> int | None:
-        return round(self.duration_value.total_seconds()) if self.duration_value else None
+    def get_duration(self) -> float | None:
+        return (
+            self.duration_value.total_seconds() if self.duration_value 
+            else datetime.now().timestamp() - self.start_time.timestamp()
+        )
     
     def is_active(self, at_time: datetime) -> bool:
         """Check if the session was active at a given time."""
@@ -98,14 +99,16 @@ class Computer:
         used_time = 0.0
         for session in self.sessions:
             session_start = session.get_start_time()
-            session_end = session.get_end_time() or now
+            session_end = session.get_end_time() if session.get_end_time() is not None else now
             
-            if session_end < window_start or session_start > now:
-                continue
-            
-            overlap_start = max(session_start, window_start)
-            overlap_end = min(session_end, now)
-            used_time += (overlap_end - overlap_start).total_seconds()
+            # Only count sessions that overlap with the time window
+            if session_end >= window_start and session_start <= now:
+                # Calculate the overlap duration
+                overlap_start = max(session_start, window_start)
+                overlap_end = min(session_end, now)
+                overlap_duration = (overlap_end - overlap_start).total_seconds()
+                if overlap_duration > 0:
+                    used_time += overlap_duration
         
         usage_percentage = (used_time / total_time) * 100 if total_time > 0 else 0.0
         return round(usage_percentage, 2)
