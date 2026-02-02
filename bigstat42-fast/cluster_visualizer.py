@@ -395,6 +395,13 @@ class ClusterVisualizer:
         # Export hint
         export_text = self.font_small.render("Press E to export view", True, COLOR_ROW_LABEL)
         self.screen.blit(export_text, (legend_x + 400, legend_y + 30))
+
+        reload_text = self.font_small.render("Press R to regenerate data", True, COLOR_ROW_LABEL)
+        self.screen.blit(reload_text, (legend_x + 400, legend_y + 55))
+
+        last_update = self.cluster_data.get("last_update", "N/A") if self.cluster_data else "N/A"
+        update_text = self.font_small.render(f"Last Data Update: {last_update}", True, COLOR_ROW_LABEL)
+        self.screen.blit(update_text, (legend_x + 400, legend_y + 80))
     
     def draw_tooltip(self, computer_rect: ComputerRect):
         """Draw tooltip for hovered computer"""
@@ -475,6 +482,12 @@ class ClusterVisualizer:
                         self.change_time_window("all_time")
                     elif event.key == pygame.K_e:
                         self.export_screenshot()
+                    elif event.key == pygame.K_r:
+                        # call main.py to regenerate data
+                        import subprocess
+                        subprocess.run([sys.executable, "bigstat42-fast/main.py"])
+                        self.load_data()
+                        self.build_layout()
             
             self.draw()
             clock.tick(30)  # 30 FPS

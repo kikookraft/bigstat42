@@ -253,7 +253,8 @@ class Cluster:
     
     def to_dict(self, first_timestamp: int | None) -> dict[str, list[dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]]]:
         return {
-            "zones": [zone.to_dict(first_timestamp) for zone in self.zones.values()]
+            "zones": [zone.to_dict(first_timestamp) for zone in self.zones.values()],
+            "last_update": datetime.now().isoformat(sep=" ", timespec="seconds")
         }
 
 
