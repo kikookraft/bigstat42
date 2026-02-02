@@ -36,8 +36,9 @@ class Session:
     def __init__(self, host: str, start_time: int, end_time: int | None) -> None:
         self.host = host
         self.start_time = datetime.fromtimestamp(start_time / 1000)
-        self.end_time = datetime.fromtimestamp(end_time / 1000) if end_time is not None else None
-        self.duration_value = self.end_time - self.start_time if self.end_time else None
+        # Treat 0 as None since timestamp 0 is Unix epoch (1970-01-01), which is invalid
+        self.end_time = datetime.fromtimestamp(end_time / 1000) if end_time is not None and end_time != 0 else None
+        self.duration_value: timedelta | None = self.end_time - self.start_time if self.end_time else None
 
     def get_host(self) -> str:
         return self.host
@@ -48,16 +49,16 @@ class Session:
     def get_end_time(self) -> datetime:
         return self.end_time
     
-    def get_duration(self) -> timedelta:
-        return self.duration_value
+    def get_duration(self) -> int | None:
+        return round(self.duration_value.total_seconds()) if self.duration_value else None
     
     def is_active(self, at_time: datetime) -> bool:
         """Check if the session was active at a given time."""
         return self.start_time <= at_time and (self.end_time is None or self.end_time >= at_time)
     
-    def update_end_time(self, new_end_time: int) -> None:
+    def update_end_time(self, new_end_time: int | None) -> None:
         """Update the end time of the session."""
-        if new_end_time is None: return
+        if new_end_time is None or new_end_time == 0: return
         self.end_time = datetime.fromtimestamp(new_end_time / 1000)
         self.duration_value = self.end_time - self.start_time
     
@@ -69,7 +70,7 @@ class Session:
             "host": self.host,
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat() if self.end_time else None,
-            "duration": self.duration_value.total_seconds() if self.duration_value else None
+            "duration": self.get_duration()
         }
 
 class Computer:
@@ -78,7 +79,6 @@ class Computer:
         self.position = position  # 1-8 (position in row)
         self.name = name  # e.g., "z4r1p3"
         self.sessions: list[Session] = []
-        self.total_usage: timedelta = timedelta()
     
     def add_session(self, session: Session) -> None:
         """Add session with overlap detection"""
@@ -86,21 +86,41 @@ class Computer:
             if check_overlap(existing_session, session):
                 raise ValueError(f"Overlapping sessions detected on {self.name}: {existing_session} and {session}")
         self.sessions.append(session)
-        self.total_usage += session.get_duration() if session.get_duration() else timedelta()
     
     def get_usage_percentage(self, time_window: timedelta) -> float:
         """Calculate usage as percentage of time window"""
-        return (self.total_usage.total_seconds() / time_window.total_seconds()) * 100
+        if not self.sessions:
+            return 0.0
+        now = datetime.now()
+        window_start = now - time_window if time_window != timedelta() else datetime.min
+        total_time = time_window.total_seconds() if time_window != timedelta() else (now - min(s.get_start_time() for s in self.sessions)).total_seconds()
+        
+        used_time = 0.0
+        for session in self.sessions:
+            session_start = session.get_start_time()
+            session_end = session.get_end_time() or now
+            
+            if session_end < window_start or session_start > now:
+                continue
+            
+            overlap_start = max(session_start, window_start)
+            overlap_end = min(session_end, now)
+            used_time += (overlap_end - overlap_start).total_seconds()
+        
+        usage_percentage = (used_time / total_time) * 100 if total_time > 0 else 0.0
+        return round(usage_percentage, 2)
 
-    def get_total_usage(self) -> timedelta:
-        return self.total_usage
+    def get_total_usage(self) -> int:
+        """Calculate total usage time across all sessions"""
+        total_usage = sum((s.get_duration() for s in self.sessions if s.get_duration()), 0)
+        return total_usage
     
-    def average_session_duration(self, time_window: timedelta = timedelta()) -> timedelta | None:
+    def average_session_duration(self, time_window: timedelta = timedelta()) -> int | None:
         """Calculate average session duration"""
         if not self.sessions:
             return None
-        total_duration = sum((s.get_duration() for s in self.sessions if s.get_duration()), timedelta())
-        return total_duration / len(self.sessions)
+        total_duration = sum((s.get_duration() for s in self.sessions if s.get_duration()), 0)
+        return round(total_duration / len(self.sessions))
     
     def get_session_number(self, time_window: timedelta = timedelta()) -> int:
         """Get number of sessions in a given time window"""
@@ -121,7 +141,7 @@ class Computer:
         return any(s.is_active(at_time) for s in self.sessions)
 
     def __repr__(self) -> str:
-        return f"Computer(name={self.name}, position={self.position}, total_usage={self.total_usage})"
+        return f"Computer(name={self.name}, position={self.position}, total_usage={self.get_total_usage()}s, sessions={len(self.sessions)})"
     
     def to_dict(self) -> dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]:
         return {
@@ -131,24 +151,24 @@ class Computer:
             "1d_stats": {
                 "session_count": self.get_session_number(timedelta(days=1)),
                 "usage_percentage": self.get_usage_percentage(timedelta(days=1)),
-                "average_session_duration": self.average_session_duration(timedelta(days=1)).total_seconds() if self.average_session_duration(timedelta(days=1)) else None
+                "average_session_duration": self.average_session_duration(timedelta(days=1)) if self.average_session_duration(timedelta(days=1)) else None
             },
             "7d_stats": {
                 "session_count": self.get_session_number(timedelta(days=7)),
                 "usage_percentage": self.get_usage_percentage(timedelta(days=7)),
-                "average_session_duration": self.average_session_duration(timedelta(days=7)).total_seconds() if self.average_session_duration(timedelta(days=7)) else None
+                "average_session_duration": self.average_session_duration(timedelta(days=7)) if self.average_session_duration(timedelta(days=7)) else None
             },
             "30d_stats": {
                 "session_count": self.get_session_number(timedelta(days=30)),
                 "usage_percentage": self.get_usage_percentage(timedelta(days=30)),
-                "average_session_duration": self.average_session_duration(timedelta(days=30)).total_seconds() if self.average_session_duration(timedelta(days=30)) else None
+                "average_session_duration": self.average_session_duration(timedelta(days=30)) if self.average_session_duration(timedelta(days=30)) else None
             },
             "all_time_stats": {
                 "session_count": self.get_session_number(),
                 "usage_percentage": self.get_usage_percentage(timedelta(days=365*10)),  # assuming 10 years as "all time"
-                "average_session_duration": self.average_session_duration(timedelta(days=365*10)).total_seconds() if self.average_session_duration(timedelta(days=365*10)) else None
+                "average_session_duration": self.average_session_duration(timedelta(days=365*10)) if self.average_session_duration(timedelta(days=365*10)) else None
             },
-            "total_usage_seconds": self.total_usage.total_seconds()
+            "total_usage_seconds": self.get_total_usage()
         }
 
 class Row:
@@ -171,7 +191,7 @@ class Row:
     def __repr__(self) -> str:
         return f"Row(row_number={self.row_number}, computers={list(self.computers.keys())})"
     
-    def to_dict(self) -> dict[str, str | int | list[dict[str, str | int | list[dict[str, str | float | None]]]]]:
+    def to_dict(self) -> dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]:
         return {
             "row_number": self.row_number,
             "computers": [comp.to_dict() for comp in self.computers.values()]
@@ -192,7 +212,7 @@ class Zone:
     def __repr__(self) -> str:
         return f"Zone(zone_name={self.zone_name}, rows={list(self.rows.keys())})"
     
-    def to_dict(self) -> dict[str, str | int | list[dict[str, str | int | list[dict[str, str | int | list[dict[str, str | float | None]]]]]]]:
+    def to_dict(self) -> dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]:
         return {
             "zone_name": self.zone_name,
             "rows": [row.to_dict() for row in self.rows.values()]
@@ -212,7 +232,7 @@ class Cluster:
     def __repr__(self) -> str:
         return f"Cluster(zones={list(self.zones.keys())})"
     
-    def to_dict(self) -> dict[str, list[dict[str, str | int | list[dict[str, str | int | list[dict[str, str | int | list[dict[str, str | float | None]]]]]]]]]:
+    def to_dict(self) -> dict[str, list[dict[str, str | list[dict[str, int | list[dict[str, str | int | list[dict[str, str | float | None]] | dict[str, int | float | None]]]]]]]]:
         return {
             "zones": [zone.to_dict() for zone in self.zones.values()]
         }
