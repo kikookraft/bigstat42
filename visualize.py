@@ -125,7 +125,7 @@ def is_computer_used(computer_data: Dict[str, Any]) -> bool:
 class ComputerRect:
     """Represents a computer position on screen"""
     def __init__(self, name: str, position: int, rect: pygame.Rect, 
-                 usage_percent: float, session_count: int, avg_duration: Optional[float], max_usage: float = 100.0, is_used: bool = False):
+                 usage_percent: float, session_count: int, avg_duration: Optional[float], max_usage: float = 100.0, is_used: bool = False, border_radius: int = 10):
         self.name = name
         self.position = position
         self.rect = rect
@@ -134,17 +134,18 @@ class ComputerRect:
         self.avg_duration = avg_duration
         self.color = interpolate_color(usage_percent, max_usage)
         self.is_used = is_used
+        self.border_radius = border_radius
     
     def draw(self, screen: pygame.Surface, font: pygame.font.Font):
         """Draw the computer rectangle with heatmap color"""
         # Fill with heatmap color
-        pygame.draw.rect(screen, self.color, self.rect)
+        pygame.draw.rect(screen, self.color, self.rect, border_radius=self.border_radius)
         
         # Draw border
         if self.is_used:
-            pygame.draw.rect(screen, COLOR_USED, self.rect, 3)
+            pygame.draw.rect(screen, COLOR_USED, self.rect, 3, border_radius=self.border_radius)
         else:
-            pygame.draw.rect(screen, COLOR_COMPUTER_BORDER, self.rect, 2)
+            pygame.draw.rect(screen, COLOR_COMPUTER_BORDER, self.rect, 2, border_radius=self.border_radius)
         
         # Draw position number
         text = font.render(str(self.position), True, COLOR_TEXT)
@@ -428,8 +429,8 @@ class ClusterVisualizer:
         
         # Draw tooltip background
         tooltip_rect = pygame.Rect(tooltip_x, tooltip_y, tooltip_width, tooltip_height)
-        pygame.draw.rect(self.screen, (255, 255, 220), tooltip_rect)
-        pygame.draw.rect(self.screen, COLOR_COMPUTER_BORDER, tooltip_rect, 2)
+        pygame.draw.rect(self.screen, (250, 250, 250), tooltip_rect, border_radius=10)
+        pygame.draw.rect(self.screen, COLOR_COMPUTER_BORDER, tooltip_rect, 2, border_radius=10)
         
         # Draw tooltip text
         for i, line in enumerate(lines):
