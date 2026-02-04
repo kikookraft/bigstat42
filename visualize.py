@@ -18,7 +18,7 @@ COLOR_BACKGROUND = (240, 240, 240)
 COLOR_TEXT = (80, 80, 80)
 COLOR_ZONE_LABEL = (50, 50, 50)
 COLOR_ROW_LABEL = (150, 150, 150)
-COLOR_COMPUTER_BORDER = (150, 30, 30)
+COLOR_COMPUTER_BORDER = (50, 30, 30)
 COLOR_USED = (30, 200, 30)
 COLOR_DISABLED = (200, 200, 200)
 
@@ -143,9 +143,9 @@ class ComputerRect:
         
         # Draw border
         if self.is_used:
-            pygame.draw.rect(screen, COLOR_USED, self.rect, 3, border_radius=self.border_radius)
+            pygame.draw.rect(screen, COLOR_USED, self.rect, 4, border_radius=self.border_radius)
         else:
-            pygame.draw.rect(screen, COLOR_COMPUTER_BORDER, self.rect, 2, border_radius=self.border_radius)
+            pygame.draw.rect(screen, COLOR_COMPUTER_BORDER, self.rect, 3, border_radius=self.border_radius)
         
         # Draw position number
         text = font.render(str(self.position), True, COLOR_TEXT)
