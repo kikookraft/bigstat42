@@ -143,9 +143,9 @@ class ComputerRect:
         
         # Draw border
         if self.is_used:
-            pygame.draw.rect(screen, COLOR_USED, self.rect, 4, border_radius=self.border_radius)
+            pygame.draw.rect(screen, COLOR_USED, self.rect, int(self.border_radius/2), border_radius=self.border_radius)
         else:
-            pygame.draw.rect(screen, COLOR_COMPUTER_BORDER, self.rect, 3, border_radius=self.border_radius)
+            pygame.draw.rect(screen, COLOR_COMPUTER_BORDER, self.rect, int(self.border_radius/2), border_radius=self.border_radius)
         
         # Draw position number
         text = font.render(str(self.position), True, COLOR_TEXT)
@@ -165,9 +165,10 @@ class ComputerRect:
 
 class ClusterVisualizer:
     """Main visualizer class"""
-    def __init__(self, json_file: str, time_window: str = "7d"):
+    def __init__(self, json_file: str, time_window: str = "7d", scale: float = 1.0):
         self.json_file = json_file
         self.time_window = time_window
+        self.scale = scale
         self.cluster_data = None
         self.computer_rects: List[ComputerRect] = []
         self.hovered_computer: Optional[ComputerRect] = None
@@ -178,10 +179,10 @@ class ClusterVisualizer:
         
         # Initialize Pygame
         pygame.init()
-        self.font_small = pygame.font.Font(None, 20)
-        self.font_medium = pygame.font.Font(None, 28)
-        self.font_large = pygame.font.Font(None, 36)
-        self.font_tooltip = pygame.font.Font(None, 22)
+        self.font_small = pygame.font.Font(None, int(20 * scale))
+        self.font_medium = pygame.font.Font(None, int(28 * scale))
+        self.font_large = pygame.font.Font(None, int(36 * scale))
+        self.font_tooltip = pygame.font.Font(None, int(22 * scale))
         
         # Calculate screen size and create display
         self.calculate_layout()
@@ -204,18 +205,35 @@ class ClusterVisualizer:
     
     def calculate_layout(self):
         """Calculate screen dimensions based on cluster layout"""
-        # Find max dimensions needed
-        max_width = 0
-        max_height = 0
+        # Apply scaling to all layout constants
+        s = self.scale
+        computer_size = int(COMPUTER_SIZE * s)
+        computer_spacing = int(COMPUTER_SPACING * s)
+        row_spacing = int(ROW_SPACING * s)
+        zone_spacing = int(ZONE_SPACING * s)
+        margin_top = int(MARGIN_TOP * s)
+        margin_left = int(MARGIN_LEFT * s)
+        margin_right = int(MARGIN_RIGHT * s)
+        margin_bottom = int(MARGIN_BOTTOM * s)
+        
+        # Store scaled values for use in other methods
+        self.computer_size = computer_size
+        self.computer_spacing = computer_spacing
+        self.row_spacing = row_spacing
+        self.zone_spacing = zone_spacing
+        self.margin_top = margin_top
+        self.margin_left = margin_left
+        self.margin_right = margin_right
+        self.margin_bottom = margin_bottom
         
         # Calculate width: 2 zones side by side
-        zone_width = 8 * (COMPUTER_SIZE + COMPUTER_SPACING)
-        max_width = MARGIN_LEFT + zone_width * 2 + ZONE_SPACING + MARGIN_RIGHT
+        zone_width = 8 * (computer_size + computer_spacing)
+        max_width = margin_left + zone_width * 2 + zone_spacing + margin_right
         
         # Calculate height: 2 floors (upper and lower)
         rows_per_floor = 13  # Max rows per zone
-        floor_height = rows_per_floor * (COMPUTER_SIZE + ROW_SPACING)
-        max_height = MARGIN_TOP + floor_height * 2 + ZONE_SPACING + MARGIN_BOTTOM + 150  # Extra for legend
+        floor_height = rows_per_floor * (computer_size + row_spacing)
+        max_height = margin_top + floor_height * 2 + zone_spacing + margin_bottom + int(150 * s)  # Extra for legend
         
         self.screen_width = max_width
         self.screen_height = max_height
@@ -250,7 +268,7 @@ class ClusterVisualizer:
         self.draw_floor(zones_dict, UPPER_ZONES, 0)
         
         # Draw lower floor (Z4, Z3)
-        floor_offset = 13 * (COMPUTER_SIZE + ROW_SPACING) + ZONE_SPACING
+        floor_offset = 13 * (self.computer_size + self.row_spacing) + self.zone_spacing
         self.draw_floor(zones_dict, LOWER_ZONES, floor_offset)
     
     def draw_floor(self, zones_dict: Dict[str, Any], zone_names: List[str], y_offset: int):
@@ -260,9 +278,9 @@ class ClusterVisualizer:
                 continue
             
             zone_data = zones_dict[zone_name]
-            x_offset = idx * (8 * (COMPUTER_SIZE + COMPUTER_SPACING) + ZONE_SPACING)
+            x_offset = idx * (8 * (self.computer_size + self.computer_spacing) + self.zone_spacing)
             
-            self.draw_zone(zone_data, MARGIN_LEFT + x_offset, MARGIN_TOP + y_offset)
+            self.draw_zone(zone_data, self.margin_left + x_offset, self.margin_top + y_offset)
     
     def draw_zone(self, zone_data: Dict[str, Any], start_x: int, start_y: int):
         """Draw a single zone with all its rows"""
@@ -270,19 +288,19 @@ class ClusterVisualizer:
         
         for row in rows:
             row_number = row["row_number"]
-            row_y = start_y + (row_number - 1) * (COMPUTER_SIZE + ROW_SPACING)
+            row_y = start_y + (row_number - 1) * (self.computer_size + self.row_spacing)
             
             computers = sorted(row.get("computers", []), key=lambda c: c["position"])
             
             for computer in computers:
                 position = computer["position"]
                 # Position from right to left (8 to 1 for z2, 5 to 1 for z1, etc.)
-                computer_x = start_x + (8 - position) * (COMPUTER_SIZE + COMPUTER_SPACING)
+                computer_x = start_x + (8 - position) * (self.computer_size + self.computer_spacing)
                 
                 # Get statistics
                 usage_percent, session_count, avg_duration = self.get_computer_stats(computer)
                 
-                rect = pygame.Rect(computer_x, row_y, COMPUTER_SIZE, COMPUTER_SIZE)
+                rect = pygame.Rect(computer_x, row_y, self.computer_size, self.computer_size)
                 computer_rect = ComputerRect(
                     computer["name"],
                     position,
@@ -291,7 +309,8 @@ class ClusterVisualizer:
                     session_count,
                     avg_duration,
                     self.max_usage,
-                    is_used=is_computer_used(computer)
+                    is_used=is_computer_used(computer),
+                    border_radius=int(10 * self.scale)
                 )
                 self.computer_rects.append(computer_rect)
     
@@ -341,69 +360,69 @@ class ClusterVisualizer:
         """Draw zone labels"""
         # Upper zones
         for idx, zone_name in enumerate(UPPER_ZONES):
-            x_offset = idx * (8 * (COMPUTER_SIZE + COMPUTER_SPACING) + ZONE_SPACING)
+            x_offset = idx * (8 * (self.computer_size + self.computer_spacing) + self.zone_spacing)
             zone_text = self.font_large.render(zone_name.upper(), True, COLOR_ZONE_LABEL)
-            self.screen.blit(zone_text, (MARGIN_LEFT + x_offset + 150, MARGIN_TOP - 40))
+            self.screen.blit(zone_text, (self.margin_left + x_offset + int(150 * self.scale), self.margin_top - int(40 * self.scale)))
         
         # Lower zones
-        floor_offset = 13 * (COMPUTER_SIZE + ROW_SPACING) + ZONE_SPACING
+        floor_offset = 13 * (self.computer_size + self.row_spacing) + self.zone_spacing
         for idx, zone_name in enumerate(LOWER_ZONES):
-            x_offset = idx * (8 * (COMPUTER_SIZE + COMPUTER_SPACING) + ZONE_SPACING)
+            x_offset = idx * (8 * (self.computer_size + self.computer_spacing) + self.zone_spacing)
             zone_text = self.font_large.render(zone_name.upper(), True, COLOR_ZONE_LABEL)
-            self.screen.blit(zone_text, (MARGIN_LEFT + x_offset + 150, MARGIN_TOP + floor_offset - 40))
+            self.screen.blit(zone_text, (self.margin_left + x_offset + int(150 * self.scale), self.margin_top + floor_offset - int(40 * self.scale)))
     
     def draw_row_labels(self):
         """Draw row number labels"""
         for row_num in range(1, 14):
             # Upper floor rows
-            row_y = MARGIN_TOP + (row_num - 1) * (COMPUTER_SIZE + ROW_SPACING)
+            row_y = self.margin_top + (row_num - 1) * (self.computer_size + self.row_spacing)
             row_text = self.font_small.render(f"R{row_num}", True, COLOR_ROW_LABEL)
-            self.screen.blit(row_text, (MARGIN_LEFT - 40, row_y + COMPUTER_SIZE // 2 - 10))
+            self.screen.blit(row_text, (self.margin_left - int(40 * self.scale), row_y + self.computer_size // 2 - int(10 * self.scale)))
             
             # Lower floor rows
-            floor_offset = 13 * (COMPUTER_SIZE + ROW_SPACING) + ZONE_SPACING
-            row_y_lower = MARGIN_TOP + floor_offset + (row_num - 1) * (COMPUTER_SIZE + ROW_SPACING)
+            floor_offset = 13 * (self.computer_size + self.row_spacing) + self.zone_spacing
+            row_y_lower = self.margin_top + floor_offset + (row_num - 1) * (self.computer_size + self.row_spacing)
             row_text_lower = self.font_small.render(f"R{row_num}", True, COLOR_ROW_LABEL)
-            self.screen.blit(row_text_lower, (MARGIN_LEFT - 40, row_y_lower + COMPUTER_SIZE // 2 - 10))
+            self.screen.blit(row_text_lower, (self.margin_left - int(40 * self.scale), row_y_lower + self.computer_size // 2 - int(10 * self.scale)))
     
     def draw_legend(self):
         """Draw color legend"""
-        legend_y = self.screen_height - 120
-        legend_x = 50
+        legend_y = self.screen_height - int(120 * self.scale)
+        legend_x = int(50 * self.scale)
         
         # Legend title
         legend_title = self.font_medium.render("Usage Legend:", True, COLOR_ZONE_LABEL)
-        self.screen.blit(legend_title, (legend_x, legend_y - 30))
+        self.screen.blit(legend_title, (legend_x, legend_y - int(30 * self.scale)))
         
         # Draw color gradient
-        segment_width = 60
+        segment_width = int(60 * self.scale)
         for i, color in enumerate(HEATMAP_COLORS):
-            rect = pygame.Rect(legend_x + i * segment_width, legend_y, segment_width, 30)
+            rect = pygame.Rect(legend_x + i * segment_width, legend_y, segment_width, int(30 * self.scale))
             pygame.draw.rect(self.screen, color, rect)
             pygame.draw.rect(self.screen, COLOR_COMPUTER_BORDER, rect, 1)
             
             # Labels
             if i == 0:
                 label = self.font_small.render("0%", True, COLOR_TEXT)
-                self.screen.blit(label, (rect.x, rect.y + 35))
+                self.screen.blit(label, (rect.x, rect.y + int(35 * self.scale)))
             elif i == len(HEATMAP_COLORS) - 1:
                 label = self.font_small.render("100%", True, COLOR_TEXT)
-                self.screen.blit(label, (rect.x + segment_width - 30, rect.y + 35))
+                self.screen.blit(label, (rect.x + segment_width - int(30 * self.scale), rect.y + int(35 * self.scale)))
         
         # Time window selector hint
         hint_text = self.font_small.render("Press 1/7/30/A to change time window", True, COLOR_ROW_LABEL)
-        self.screen.blit(hint_text, (legend_x + 400, legend_y + 5))
+        self.screen.blit(hint_text, (legend_x + int(400 * self.scale), legend_y + int(5 * self.scale)))
         
         # Export hint
         export_text = self.font_small.render("Press E to export view", True, COLOR_ROW_LABEL)
-        self.screen.blit(export_text, (legend_x + 400, legend_y + 30))
+        self.screen.blit(export_text, (legend_x + int(400 * self.scale), legend_y + int(30 * self.scale)))
 
         reload_text = self.font_small.render("Press R to regenerate data", True, COLOR_ROW_LABEL)
-        self.screen.blit(reload_text, (legend_x + 400, legend_y + 55))
+        self.screen.blit(reload_text, (legend_x + int(400 * self.scale), legend_y + int(55 * self.scale)))
 
         last_update = self.cluster_data.get("last_update", "N/A") if self.cluster_data else "N/A"
         update_text = self.font_small.render(f"Last Data Update: {last_update}", True, COLOR_ROW_LABEL)
-        self.screen.blit(update_text, (legend_x + 400, legend_y + 80))
+        self.screen.blit(update_text, (legend_x + int(400 * self.scale), legend_y + int(80 * self.scale)))
     
     def draw_tooltip(self, computer_rect: ComputerRect):
         """Draw tooltip for hovered computer"""
@@ -503,8 +522,20 @@ def main():
     parser.add_argument("--time-window", type=str, default="1d", 
                        choices=["1d", "7d", "30d", "all_time"],
                        help="Time window for statistics (default: 7d)")
+    parser.add_argument("--scale", type=float, default=1.0,
+                       help="Scale factor for display (0.5 for 1080p, 1.0 for 4K, default: 1.0)")
+    parser.add_argument("--resolution", type=str, choices=["1080p", "4k"], default="1080p", nargs="?",
+                       help="Preset resolution (1080p=0.5 scale, 4k=1.0 scale)")
     
     args = parser.parse_args()
+    
+    # Handle resolution presets
+    if args.resolution == "1080p":
+        scale = 0.5
+    elif args.resolution == "4k":
+        scale = 1.0
+    else:
+        scale = args.scale
     if args.json_file is None:
         if not os.path.exists("cluster.json"):
             print("No JSON file provided and cluster.json not found. Generating data...")
@@ -514,7 +545,7 @@ def main():
             print("No JSON file provided. Using existing cluster.json.")
             args.json_file = "cluster.json"
     
-    visualizer = ClusterVisualizer(args.json_file, args.time_window)
+    visualizer = ClusterVisualizer(args.json_file, args.time_window, scale)
     visualizer.run()
 
 
