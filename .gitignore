@@ -210,3 +210,5 @@ __marimo__/
 output/
 demo_output/
 cluster.json
+bigstat42-fast/Discovery.svg
+bigstat42-fast/Io.svg
