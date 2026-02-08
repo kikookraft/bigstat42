@@ -186,7 +186,7 @@ class ClusterVisualizer:
         
         # Calculate screen size and create display
         self.calculate_layout()
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.RESIZABLE)
         pygame.display.set_caption(f"Cluster Usage Heatmap - {time_window}")
         
         # Build visual elements
@@ -470,6 +470,42 @@ class ClusterVisualizer:
         pygame.display.set_caption(f"Cluster Usage Heatmap - {new_window}")
         self.build_layout()
     
+    def recalculate_scale_from_window(self, width: int, height: int):
+        """Recalculate scale factor based on new window dimensions"""
+        # Base dimensions (from original calculation with scale=1.0)
+        base_width = MARGIN_LEFT + (8 * (COMPUTER_SIZE + COMPUTER_SPACING)) * 2 + ZONE_SPACING + MARGIN_RIGHT
+        base_height = MARGIN_TOP + (13 * (COMPUTER_SIZE + ROW_SPACING)) * 2 + ZONE_SPACING + MARGIN_BOTTOM + 150
+        
+        # Calculate scale that fits both width and height
+        scale_x = width / base_width
+        scale_y = height / base_height
+        
+        # Use the smaller scale to ensure everything fits
+        new_scale = min(scale_x, scale_y)
+        
+        # Clamp scale to reasonable bounds
+        new_scale = max(0.3, min(new_scale, 2.0))
+        
+        return new_scale
+    
+    def handle_resize(self, width: int, height: int):
+        """Handle window resize event"""
+        # Update screen dimensions
+        self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
+        
+        # Recalculate scale based on new window size
+        self.scale = self.recalculate_scale_from_window(width, height)
+        
+        # Update fonts with new scale
+        self.font_small = pygame.font.Font(None, int(20 * self.scale))
+        self.font_medium = pygame.font.Font(None, int(28 * self.scale))
+        self.font_large = pygame.font.Font(None, int(36 * self.scale))
+        self.font_tooltip = pygame.font.Font(None, int(22 * self.scale))
+        
+        # Recalculate layout with new scale
+        self.calculate_layout()
+        self.build_layout()
+    
     def export_screenshot(self):
         """Export current view as PNG"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -486,6 +522,9 @@ class ClusterVisualizer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                
+                elif event.type == pygame.VIDEORESIZE:
+                    self.handle_resize(event.w, event.h)
                 
                 elif event.type == pygame.MOUSEMOTION:
                     self.handle_mouse_motion(event.pos)
