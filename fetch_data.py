@@ -280,7 +280,10 @@ def get_first_timestamp(json_data: dict[str, list[dict[str, int | str | None]]])
     sessions = json_data.get("sessions", [])
     if not sessions:
         return None
-    first_timestamp = min(session["startTime"] for session in sessions if "startTime" in session and isinstance(session["startTime"], int))
+    valid_timestamps = [session["startTime"] for session in sessions if "startTime" in session and isinstance(session["startTime"], int)]
+    if not valid_timestamps:
+        return None
+    first_timestamp = min(valid_timestamps)
     return first_timestamp
 
 def build_cluster(data: dict[str, list[dict[str, int | str | None]]]) -> Cluster:
@@ -344,8 +347,143 @@ def build_cluster(data: dict[str, list[dict[str, int | str | None]]]) -> Cluster
             computer.add_session(session)
         except ValueError as ve:
             print(f"Warning: {ve}", file=sys.stderr)
-
+    
     return cluster
+
+
+def generate_weeks_stats(cluster:Cluster) -> dict:
+    """Generate statistics for each days of the weeks from all known sessions in the cluster"""
+    days: dict[str, dict[str, dict[str, int | float]]] = {}
+    for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
+        days[day] = {
+            "total": {
+                "session_count": 0,
+                "usage_seconds": 0
+            },
+            "average": {
+                "session_count": 0,
+                "usage_seconds": 0
+            }
+        }
+
+    def get_day_name(dt: datetime) -> str:
+        return dt.strftime("%A")  # Get full weekday name
+    
+    def weeks_passed(start_time: datetime) -> int:
+        now = datetime.now()
+        return max(1, (now - start_time).days // 7)  # Ensure at least 1 week to avoid division by zero
+
+    for zone in cluster.zones.values():
+        for row in zone.rows.values():
+            for computer in row.computers.values():
+                for session in computer.sessions:
+                    day_name = get_day_name(session.get_start_time())
+                    days[day_name]["total"]["session_count"] += 1
+                    session_duration: float | None = session.get_duration()
+                    if session_duration:
+                        # check if the duration does not exceed the current day (if the session is still active or ended on another day)
+                        session_end_time = session.get_end_time() or datetime.now()
+                        if session_end_time.date() != session.get_start_time().date():
+                            # if the session ended on another day, we only count the duration until the end of the start day
+                            session_duration = (datetime.combine(session.get_start_time().date(), datetime.max.time()) - session.get_start_time()).total_seconds()
+                            session_duration = max(session_duration, 0)  # Ensure non-negative duration
+                            # add the remaining duration to the day of the end time if it's different
+                            if session_end_time.date() != session.get_start_time().date():
+                                end_day_name = get_day_name(session_end_time)
+                                remaining_duration = (session_end_time - datetime.combine(session.get_start_time().date(), datetime.max.time())).total_seconds()
+                                remaining_duration = max(remaining_duration, 0)  # Ensure non-negative duration
+                                days[end_day_name]["total"]["session_count"] += 1  # Count the session for the end day as well
+                                days[end_day_name]["total"]["usage_seconds"] += remaining_duration
+                        days[day_name]["total"]["usage_seconds"] += session_duration
+    # Calculate averages (get the total sessions and usage seconds for each day and divide by the number of ocurrences of that day in the data)
+    first_timestamp = get_first_timestamp({"sessions": [s.to_dict() for zone in cluster.zones.values() for row in zone.rows.values() for comp in row.computers.values() for s in comp.sessions]})
+    
+    # If there are no sessions, return empty stats
+    if first_timestamp is None:
+        return days
+    
+    first_datetime = datetime.fromtimestamp(first_timestamp)
+    weeks = weeks_passed(first_datetime)
+    for day in days:
+        total_sessions: int | float = days[day]["total"]["session_count"]
+        total_usage: int | float = days[day]["total"]["usage_seconds"]
+        days[day]["average"]["session_count"] = round(total_sessions / weeks, 2)  # Average per day of the week
+        days[day]["average"]["usage_seconds"] = round(total_usage / weeks, 2)  # Average per day of the week
+
+    return days
+
+def generate_day_stats(cluster: Cluster, day: str) -> dict:
+    """Generate average concurrent users for every 10 minutes of a day of the week (00:00 to 23:59)"""
+    # Get all sessions
+    all_sessions = [s for zone in cluster.zones.values()
+                    for row in zone.rows.values()
+                    for comp in row.computers.values()
+                    for s in comp.sessions]
+    
+    if not all_sessions:
+        return {}
+    
+    # Find all unique dates for this day of the week in the dataset
+    day_dates = set()
+    for session in all_sessions:
+        current_date = session.get_start_time().date()
+        end_date = (session.get_end_time() or datetime.now()).date()
+        
+        check_date = current_date
+        while check_date <= end_date:
+            if datetime.combine(check_date, datetime.min.time()).strftime("%A") == day:
+                day_dates.add(check_date)
+            check_date += timedelta(days=1)
+    
+    if not day_dates:
+        return {}
+    
+    num_occurrences = len(day_dates)
+    
+    # Initialize time slots with totals
+    time_slot_totals: dict[str, int] = {}
+    current_time = datetime.strptime("00:00", "%H:%M")
+    end_of_day = datetime.strptime("23:59", "%H:%M")
+    
+    while current_time <= end_of_day:
+        time_slot = current_time.strftime("%H:%M")
+        time_slot_totals[time_slot] = 0
+        current_time += timedelta(minutes=10)
+    
+    # For each specific date occurrence of this day of the week
+    for specific_date in day_dates:
+        slot_time = datetime.strptime("00:00", "%H:%M")
+        
+        for time_slot in time_slot_totals.keys():
+            slot_time = datetime.strptime(time_slot, "%H:%M")
+            slot_datetime = datetime.combine(specific_date, slot_time.time())
+            slot_end_datetime = slot_datetime + timedelta(minutes=10)
+            
+            # Count concurrent sessions for this specific time slot on this specific date
+            concurrent_count = 0
+            for session in all_sessions:
+                session_start = session.get_start_time()
+                session_end = session.get_end_time() or datetime.now()
+                
+                # Check if session overlaps with this specific time slot
+                if session_start < slot_end_datetime and session_end > slot_datetime:
+                    concurrent_count += 1
+            
+            time_slot_totals[time_slot] += concurrent_count
+    
+    # Calculate averages
+    day_stats: dict[str, int] = {}
+    for time_slot, total in time_slot_totals.items():
+        day_stats[time_slot] = round(total / num_occurrences)
+    
+    return day_stats
+
+def generate_all_days_stats(cluster: Cluster) -> dict[str, dict[str, int]]:
+    """Generate the number of sessions for every 10 minutes of every day of the week from all known sessions in the cluster"""
+    all_days_stats: dict[str, dict[str, int]] = {}
+    for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
+        all_days_stats[day] = generate_day_stats(cluster, day)
+    return all_days_stats
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch and analyze cluster usage statistics from 42 custom API")
@@ -356,12 +494,20 @@ def main():
     data = fetch_data(args.url)
     cluster = build_cluster(data)
 
+    def print_output(cluster: Cluster) -> str:
+        dict_data = cluster.to_dict(get_first_timestamp(data))
+        dict_data["weeks_stats"] = generate_weeks_stats(cluster)
+        days_stats = generate_all_days_stats(cluster)
+        for day, stats in days_stats.items():
+            dict_data["weeks_stats"][day]["sessions_graph"] = stats
+        return json.dumps(dict_data, indent=4)
+
     if args.output:
         with open(args.output, "w") as f:
-            json.dump(cluster.to_dict(get_first_timestamp(data)), f, indent=4)
+            f.write(print_output(cluster))
     else:
         with open("cluster.json", "w") as f:
-            json.dump(cluster.to_dict(get_first_timestamp(data)), f, indent=4)
+            f.write(print_output(cluster))
 
 if __name__ == "__main__":
     main()
