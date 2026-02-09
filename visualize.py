@@ -10,6 +10,8 @@ import json
 import sys
 import argparse
 import subprocess
+import threading
+import math
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
 
@@ -40,6 +42,10 @@ MARGIN_TOP = 80
 MARGIN_LEFT = 100
 MARGIN_RIGHT = 50
 MARGIN_BOTTOM = 50
+
+# Graphics panel configuration
+GRAPHICS_PANEL_WIDTH = 1500  # Width for the graphics panel on the right
+GRAPHICS_PANEL_MARGIN = 20  # Margin between cluster view and graphics panel
 
 # Zone layouts (which zones are on each floor)
 # Based on the images provided: Z2, Z1 on upper floor; Z4, Z3 on lower floor
@@ -174,6 +180,14 @@ class ClusterVisualizer:
         self.hovered_computer: Optional[ComputerRect] = None
         self.max_usage = 100.0  # Default max usage for color scaling
         
+        # Graphics panel state
+        self.graphics_images = {}
+        
+        # Loading state
+        self.is_loading = False
+        self.loading_angle = 0
+        self.loading_thread = None
+        
         # Load data
         self.load_data()
         
@@ -183,6 +197,9 @@ class ClusterVisualizer:
         self.font_medium = pygame.font.Font(None, int(28 * scale))
         self.font_large = pygame.font.Font(None, int(36 * scale))
         self.font_tooltip = pygame.font.Font(None, int(22 * scale))
+        
+        # Load graphics
+        self.load_graphics()
         
         # Calculate screen size and create display
         self.calculate_layout()
@@ -202,6 +219,26 @@ class ClusterVisualizer:
         except Exception as e:
             print(f"Error loading JSON file: {e}", file=sys.stderr)
             sys.exit(1)
+    
+    def load_graphics(self):
+        """Load generated graphics images"""
+        graphics_dir = "cluster_usage"
+        graphics_files = {
+            "heatmap": os.path.join(graphics_dir, "_heatmap.png"),
+            "individual": os.path.join(graphics_dir, "_individual.png")
+        }
+        
+        for key, filepath in graphics_files.items():
+            if os.path.exists(filepath):
+                try:
+                    image = pygame.image.load(filepath)
+                    self.graphics_images[key] = image
+                    print(f"Loaded {key} graphic from {filepath}")
+                except Exception as e:
+                    print(f"Error loading {filepath}: {e}", file=sys.stderr)
+            else:
+                print(f"Warning: {filepath} not found. Generate graphics first with visualize_usage.py")
+                self.graphics_images[key] = None
     
     def calculate_layout(self):
         """Calculate screen dimensions based on cluster layout"""
@@ -228,7 +265,12 @@ class ClusterVisualizer:
         
         # Calculate width: 2 zones side by side
         zone_width = 8 * (computer_size + computer_spacing)
-        max_width = margin_left + zone_width * 2 + zone_spacing + margin_right
+        cluster_width = margin_left + zone_width * 2 + zone_spacing + margin_right
+        
+        # Add graphics panel width
+        graphics_panel_width = int(GRAPHICS_PANEL_WIDTH * s)
+        graphics_panel_margin = int(GRAPHICS_PANEL_MARGIN * s)
+        max_width = cluster_width + graphics_panel_margin + graphics_panel_width
         
         # Calculate height: 2 floors (upper and lower)
         rows_per_floor = 13  # Max rows per zone
@@ -237,6 +279,9 @@ class ClusterVisualizer:
         
         self.screen_width = max_width
         self.screen_height = max_height
+        self.cluster_width = cluster_width
+        self.graphics_panel_width = graphics_panel_width
+        self.graphics_panel_margin = graphics_panel_margin
     
     def get_computer_stats(self, computer_data: Dict[str, Any]) -> Tuple[float, int, Optional[float]]:
         """Extract statistics based on selected time window"""
@@ -339,9 +384,16 @@ class ClusterVisualizer:
         # Draw legend
         self.draw_legend()
         
+        # Draw graphics panel
+        self.draw_graphics_panel()
+        
         # Draw tooltip if hovering
         if self.hovered_computer:
             self.draw_tooltip(self.hovered_computer)
+        
+        # Draw loading popup if active
+        if self.is_loading:
+            self.draw_loading_popup()
         
         pygame.display.flip()
     
@@ -424,6 +476,144 @@ class ClusterVisualizer:
         update_text = self.font_small.render(f"Last Data Update: {last_update}", True, COLOR_ROW_LABEL)
         self.screen.blit(update_text, (legend_x + int(400 * self.scale), legend_y + int(80 * self.scale)))
     
+    def draw_graphics_panel(self):
+        """Draw the graphics panel on the right side with both images stacked"""
+        panel_x = self.cluster_width + self.graphics_panel_margin
+        panel_y = self.margin_top
+        panel_width = self.graphics_panel_width
+        panel_height = self.screen_height - self.margin_top - self.margin_bottom
+        
+        # Draw panel background
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
+        pygame.draw.rect(self.screen, (255, 255, 255), panel_rect)
+        pygame.draw.rect(self.screen, COLOR_COMPUTER_BORDER, panel_rect, 2)
+        
+        # Calculate space for each image (split panel in half with small gap)
+        gap = int(20 * self.scale)
+        half_height = (panel_height - gap) // 2
+        
+        # Draw heatmap on top
+        self._draw_single_graphic(
+            panel_x, panel_y, panel_width, half_height,
+            "heatmap", "Weekly Heatmap"
+        )
+        
+        # Draw individual days on bottom
+        self._draw_single_graphic(
+            panel_x, panel_y + half_height + gap, panel_width, half_height,
+            "individual", "Individual Days"
+        )
+    
+    def _draw_single_graphic(self, x: int, y: int, width: int, height: int,
+                            graphic_key: str, title: str):
+        """Draw a single graphic in the specified area"""
+        # Draw section background
+        section_rect = pygame.Rect(x + int(5 * self.scale), y + int(5 * self.scale),
+                                   width - int(10 * self.scale), 
+                                   height - int(10 * self.scale))
+        pygame.draw.rect(self.screen, (250, 250, 250), section_rect, 
+                        border_radius=int(5 * self.scale))
+        
+        # Draw title
+        title_y = y + int(10 * self.scale)
+        title_surface = self.font_small.render(title, True, COLOR_ZONE_LABEL)
+        title_x = x + (width - title_surface.get_width()) // 2
+        self.screen.blit(title_surface, (title_x, title_y))
+        
+        # Draw graphic image
+        if graphic_key in self.graphics_images and self.graphics_images[graphic_key]:
+            image = self.graphics_images[graphic_key]
+            
+            # Scale image to fit available space
+            image_rect = image.get_rect()
+            available_width = width - int(30 * self.scale)
+            available_height = height - int(50 * self.scale)
+            
+            # Calculate scaling to fit
+            scale_x = available_width / image_rect.width
+            scale_y = available_height / image_rect.height
+            scale_factor = min(scale_x, scale_y)
+            
+            new_width = int(image_rect.width * scale_factor)
+            new_height = int(image_rect.height * scale_factor)
+            
+            scaled_image = pygame.transform.smoothscale(image, (new_width, new_height))
+            
+            # Center the image
+            image_x = x + (width - new_width) // 2
+            image_y = y + int(35 * self.scale) + (available_height - new_height) // 2
+            
+            self.screen.blit(scaled_image, (image_x, image_y))
+        else:
+            # Show message if image not available
+            msg = "Not available"
+            msg_surface = self.font_small.render(msg, True, COLOR_ROW_LABEL)
+            msg_x = x + (width - msg_surface.get_width()) // 2
+            msg_y = y + height // 2
+            self.screen.blit(msg_surface, (msg_x, msg_y))
+    
+    def draw_loading_popup(self):
+        """Draw loading popup with spinning animation"""
+        # Semi-transparent overlay
+        overlay = pygame.Surface((self.screen_width, self.screen_height))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Popup dimensions
+        popup_width = int(400 * self.scale)
+        popup_height = int(200 * self.scale)
+        popup_x = (self.screen_width - popup_width) // 2
+        popup_y = (self.screen_height - popup_height) // 2
+        
+        # Draw popup background
+        popup_rect = pygame.Rect(popup_x, popup_y, popup_width, popup_height)
+        pygame.draw.rect(self.screen, (250, 250, 250), popup_rect, border_radius=int(15 * self.scale))
+        pygame.draw.rect(self.screen, COLOR_ZONE_LABEL, popup_rect, int(3 * self.scale), border_radius=int(15 * self.scale))
+        
+        # Draw title
+        title_text = "Regenerating Data..."
+        title_surface = self.font_large.render(title_text, True, COLOR_ZONE_LABEL)
+        title_x = popup_x + (popup_width - title_surface.get_width()) // 2
+        title_y = popup_y + int(30 * self.scale)
+        self.screen.blit(title_surface, (title_x, title_y))
+        
+        # Draw spinning circle
+        center_x = popup_x + popup_width // 2
+        center_y = popup_y + popup_height // 2 + int(10 * self.scale)
+        radius = int(30 * self.scale)
+        
+        # Update angle for animation
+        self.loading_angle = (self.loading_angle + 8) % 360
+        
+        # Draw spinning arc
+        for i in range(8):
+            angle = math.radians(self.loading_angle + i * 45)
+            alpha = 255 - i * 30
+            
+            # Calculate arc positions
+            start_angle = angle
+            end_angle = angle + math.radians(30)
+            
+            # Draw arc segment
+            points = []
+            for a in [start_angle, end_angle]:
+                x = center_x + int(radius * math.cos(a))
+                y = center_y + int(radius * math.sin(a))
+                points.append((x, y))
+            
+            if len(points) == 2:
+                color = (50, 100, 200, alpha)
+                # Draw line for arc segment
+                pygame.draw.line(self.screen, color[:3], points[0], points[1], int(5 * self.scale))
+        
+        # Draw message
+        msg_text = "Please wait while data is being fetched and processed..."
+        msg_surface = self.font_small.render(msg_text, True, COLOR_ROW_LABEL)
+        msg_x = popup_x + (popup_width - msg_surface.get_width()) // 2
+        msg_y = popup_y + popup_height - int(40 * self.scale)
+        self.screen.blit(msg_surface, (msg_x, msg_y))
+    
     def draw_tooltip(self, computer_rect: ComputerRect):
         """Draw tooltip for hovered computer"""
         mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -473,8 +663,13 @@ class ClusterVisualizer:
     def recalculate_scale_from_window(self, width: int, height: int):
         """Recalculate scale factor based on new window dimensions"""
         # Base dimensions (from original calculation with scale=1.0)
-        base_width = MARGIN_LEFT + (8 * (COMPUTER_SIZE + COMPUTER_SPACING)) * 2 + ZONE_SPACING + MARGIN_RIGHT
-        base_height = MARGIN_TOP + (13 * (COMPUTER_SIZE + ROW_SPACING)) * 2 + ZONE_SPACING + MARGIN_BOTTOM + 150
+        base_cluster_width = (MARGIN_LEFT + 
+                             (8 * (COMPUTER_SIZE + COMPUTER_SPACING)) * 2 + 
+                             ZONE_SPACING + MARGIN_RIGHT)
+        base_width = base_cluster_width + GRAPHICS_PANEL_MARGIN + GRAPHICS_PANEL_WIDTH
+        base_height = (MARGIN_TOP + 
+                      (13 * (COMPUTER_SIZE + ROW_SPACING)) * 2 + 
+                      ZONE_SPACING + MARGIN_BOTTOM + 150)
         
         # Calculate scale that fits both width and height
         scale_x = width / base_width
@@ -513,6 +708,38 @@ class ClusterVisualizer:
         pygame.image.save(self.screen, filename)
         print(f"Screenshot saved as {filename}")
     
+    def reload_data_thread(self):
+        """Thread function to regenerate data"""
+        try:
+            # Run fetch_data.py to regenerate cluster data
+            subprocess.run([sys.executable, "fetch_data.py"], check=True)
+            
+            # Run visualize_usage.py to regenerate graphics
+            subprocess.run([sys.executable, "visualize_usage.py"], check=True)
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Error regenerating data: {e}")
+        finally:
+            # Signal that loading is complete
+            self.is_loading = False
+    
+    def start_reload(self):
+        """Start the reload process in a background thread"""
+        if not self.is_loading:
+            self.is_loading = True
+            self.loading_thread = threading.Thread(target=self.reload_data_thread)
+            self.loading_thread.daemon = True
+            self.loading_thread.start()
+    
+    def check_reload_complete(self):
+        """Check if reload is complete and update display"""
+        if not self.is_loading and self.loading_thread and not self.loading_thread.is_alive():
+            # Reload complete, update data
+            self.load_data()
+            self.build_layout()
+            self.load_graphics()
+            self.loading_thread = None
+    
     def run(self):
         """Main event loop"""
         clock = pygame.time.Clock()
@@ -543,10 +770,11 @@ class ClusterVisualizer:
                     elif event.key == pygame.K_e:
                         self.export_screenshot()
                     elif event.key == pygame.K_r:
-                        # call main.py to regenerate data
-                        subprocess.run([sys.executable, "fetch_data.py"])
-                        self.load_data()
-                        self.build_layout()
+                        # Start reload in background thread
+                        self.start_reload()
+            
+            # Check if reload is complete
+            self.check_reload_complete()
             
             self.draw()
             clock.tick(30)  # 30 FPS
