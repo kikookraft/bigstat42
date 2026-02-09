@@ -28,6 +28,8 @@ def plot_average_weekly_usage(data: dict, output_file: str = None):
     """Plot average usage across all days of the week."""
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     colors = ['#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6', '#1abc9c', '#34495e']
+    weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    weekend = ['Saturday', 'Sunday']
     
     plt.figure(figsize=(16, 10))
     
@@ -67,6 +69,55 @@ def plot_average_weekly_usage(data: dict, output_file: str = None):
     info_text += "calculated across all occurrences of each day"
     plt.text(0.5, 0.5, info_text, ha='center', va='center', 
              fontsize=10, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    # Add inset plot: Weekday vs Weekend comparison in position 9 (bottom right)
+    ax_inset = plt.subplot(3, 3, 9)
+    
+    # Calculate weekday average
+    weekday_data = {}
+    for day in weekdays:
+        sessions_graph = data['weeks_stats'][day]['sessions_graph']
+        for time_slot, value in sessions_graph.items():
+            if time_slot not in weekday_data:
+                weekday_data[time_slot] = []
+            weekday_data[time_slot].append(value)
+    
+    weekday_avg = {t: np.mean(v) for t, v in weekday_data.items()}
+    
+    # Calculate weekend average
+    weekend_data = {}
+    for day in weekend:
+        sessions_graph = data['weeks_stats'][day]['sessions_graph']
+        for time_slot, value in sessions_graph.items():
+            if time_slot not in weekend_data:
+                weekend_data[time_slot] = []
+            weekend_data[time_slot].append(value)
+    
+    weekend_avg = {t: np.mean(v) for t, v in weekend_data.items()}
+    
+    # Plot averages
+    times = sorted(weekday_avg.keys(), key=time_to_minutes)
+    time_minutes = [time_to_minutes(t) for t in times]
+    
+    weekday_values = [weekday_avg[t] for t in times]
+    weekend_values = [weekend_avg[t] for t in times]
+    
+    ax_inset.plot(time_minutes, weekday_values, color='#0066cc', linewidth=2, 
+                  label='Weekday Avg', alpha=0.9)
+    ax_inset.fill_between(time_minutes, weekday_values, alpha=0.3, color='#0066cc')
+    
+    ax_inset.plot(time_minutes, weekend_values, color='#cc0000', linewidth=2, 
+                  label='Weekend Avg', alpha=0.9)
+    ax_inset.fill_between(time_minutes, weekend_values, alpha=0.3, color='#cc0000')
+    
+    ax_inset.set_title('Weekday vs Weekend', fontsize=10, fontweight='bold')
+    ax_inset.set_xlabel('Hour of Day', fontsize=8)
+    ax_inset.set_ylabel('Concurrent Users', fontsize=8)
+    ax_inset.grid(True, alpha=0.3)
+    ax_inset.legend(loc='upper left', fontsize=7)
+    ax_inset.set_xticks(range(0, 1440, 360))
+    ax_inset.set_xticklabels([f'{h:02d}:00' for h in range(0, 24, 6)], fontsize=7, rotation=45)
+    ax_inset.tick_params(axis='y', labelsize=7)
     
     plt.tight_layout()
     
