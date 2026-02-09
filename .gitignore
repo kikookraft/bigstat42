@@ -212,3 +212,7 @@ demo_output/
 cluster.json
 bigstat42-fast/Discovery.svg
 bigstat42-fast/Io.svg
+cluster_usage/_comparison.png
+cluster_usage/_heatmap.png
+cluster_usage/_individual.png
+cluster_usage/_weekday_vs_weekend.png

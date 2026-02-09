@@ -1,18 +1,29 @@
 # Cluster Visualizer
 
-A pygame-based interactive heatmap visualization for 42 cluster usage statistics.
+A comprehensive toolkit for 42 cluster usage analysis, featuring both interactive pygame visualizations and statistical plots.
 
 ## Overview
 
-This tool creates a visual representation of the cluster layout, mimicking the actual physical layout with zones, rows, and individual computer positions. Each computer is color-coded based on its usage percentage, creating an intuitive heatmap.
+This tool provides multiple ways to analyze cluster usage:
+- **Interactive Heatmap** (`visualize.py`): Real-time pygame visualization of cluster layout
+- **Statistical Plots** (`visualize_usage.py`): Generate graphs showing usage patterns across days
+- **Data Fetcher** (`fetch_data.py`): Collect and process cluster usage data
 
 ## Features
 
+### Interactive Heatmap (visualize.py)
 - **Interactive Heatmap**: Visual representation of cluster usage with color-coded computers
 - **Multiple Time Windows**: View statistics for 1 day, 7 days, 30 days, or all-time
 - **Hover Tooltips**: Detailed information for each computer on hover
 - **Real Layout**: Mimics the actual cluster layout with zones Z1-Z4
 - **Export Function**: Save screenshots of the current view
+
+### Usage Statistics Plots (visualize_usage.py)
+- **Individual Day Plots**: Separate graphs for each day of the week
+- **Weekly Comparison**: All days overlaid on a single graph
+- **Weekday vs Weekend**: Compare weekday and weekend usage patterns
+- **Heatmap**: Visual representation of usage across days and hours
+- **Averaged Data**: Shows mean concurrent users across all occurrences of each day
 
 ## Installation
 
@@ -25,7 +36,14 @@ python3 -m pip install -r requirements.txt
 
 ### Basic Usage
 
-The `fetch_data.py` script generates a `cluster.json` file containing the cluster usage data. You can then visualize this data using the `visualize.py` script.
+#### Fetching Data
+
+The `fetch_data.py` script generates a `cluster.json` file containing the cluster usage data:
+```bash
+python3 fetch_data.py
+```
+
+#### Interactive Visualization
 
 You can directly use `visualize.py` to generate and see the visualization in one step.
 ```bash
@@ -37,6 +55,33 @@ python3 visualize.py cluster.json
 ```
 If no json file is provided, it defaults to `cluster.json`.  
 If the file does not exist, the program generate it with `fetch_data.py`
+
+#### Statistical Plots
+
+Generate usage statistics plots:
+```bash
+# Generate all plots (saves PNG files)
+python3 visualize_usage.py
+
+# Generate specific plots
+python3 visualize_usage.py --plot comparison heatmap
+
+# Display plots interactively instead of saving
+python3 visualize_usage.py --show
+
+# Save as PDF instead of PNG
+python3 visualize_usage.py --format pdf
+
+# Specify custom input and output
+python3 visualize_usage.py --input cluster.json --output-dir ./graphs
+```
+
+Available plot types:
+- `individual` - Separate subplot for each day of the week with peak annotations
+- `comparison` - All days overlaid on a single graph for easy comparison
+- `weekday-weekend` - Average weekday usage vs average weekend usage
+- `heatmap` - 2D heatmap showing usage intensity across days and hours
+- `all` - Generate all plot types (default)
 
 ### With Time Window Selection
 
